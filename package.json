@@ -1,6 +1,6 @@
 {
   "name": "ownsearch",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Text-first local document search MCP server backed by Gemini embeddings and Qdrant.",
   "type": "module",
   "bin": {
@@ -30,7 +30,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Grumppie/OwnSearch.git"
+    "url": "https://github.com/Grumppie/OwnSearch.git"
   },
   "homepage": "https://github.com/Grumppie/OwnSearch#readme",
   "bugs": {
