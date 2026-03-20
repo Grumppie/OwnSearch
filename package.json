@@ -30,11 +30,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/Grumppie/OwnSearch.git"
+    "url": "git+https://github.com/grumppie/ownsearch.git"
   },
-  "homepage": "https://github.com/Grumppie/OwnSearch#readme",
+  "homepage": "https://github.com/grumppie/ownsearch#readme",
   "bugs": {
-    "url": "https://github.com/Grumppie/OwnSearch/issues"
+    "url": "https://github.com/grumppie/ownsearch/issues"
   },
   "publishConfig": {
     "access": "public"
