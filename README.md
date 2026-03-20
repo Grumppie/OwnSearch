@@ -24,14 +24,36 @@ V1 is intentionally text-first: simple, reliable local retrieval for docs, code,
 
 ## Quickstart
 
+Install `ownsearch` globally:
+
 ```bash
+npm install -g ownsearch
+
+Set it up, index a folder, and start searching:
+
+ownsearch setup
+ownsearch doctor
+ownsearch index ./docs --name docs
+ownsearch list-roots
+ownsearch search "what is this repo about?" --limit 5
+ownsearch search-context "what is this repo about?" --limit 8 --max-chars 12000
+ownsearch serve-mcp
+
+To connect ownsearch to a supported agent, print a config snippet for your client:
+
+ownsearch print-agent-config codex
+ownsearch print-agent-config claude-desktop
+ownsearch print-agent-config cursor
+Local development
+
+If you want to run ownsearch from source while developing locally:
+
 npm install
 npm run build
 node dist/cli.js setup
 node dist/cli.js index ./docs --name docs
 node dist/cli.js search "what is this repo about?" --limit 5
 node dist/cli.js serve-mcp
-````
 
 ## MCP tools
 
