@@ -1,0 +1,7 @@
+node_modules
+dist
+.ownsearch
+.env
+*.tgz
+smoke-*
+_testing

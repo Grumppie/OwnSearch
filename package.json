@@ -1,0 +1,61 @@
+{
+  "name": "ownsearch",
+  "version": "0.1.0",
+  "description": "Text-first local document search MCP server backed by Gemini embeddings and Qdrant.",
+  "type": "module",
+  "bin": {
+    "ownsearch": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup src/cli.ts src/mcp/server.ts --format esm --dts --clean --external pdf-parse",
+    "dev": "tsx src/cli.ts",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run typecheck && npm run build",
+    "serve-mcp": "tsx src/mcp/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "mcp",
+    "search",
+    "embeddings",
+    "gemini",
+    "qdrant",
+    "rag"
+  ],
+  "author": "OwnSearch contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/Grumppie/OwnSearch.git"
+  },
+  "homepage": "https://github.com/Grumppie/OwnSearch#readme",
+  "bugs": {
+    "url": "https://github.com/Grumppie/OwnSearch/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@google/genai": "^1.46.0",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@qdrant/js-client-rest": "^1.17.0",
+    "commander": "^14.0.1",
+    "dotenv": "^17.3.1",
+    "pdf-parse": "^2.4.5",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "@types/pdf-parse": "^1.1.5",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}
