@@ -57,3 +57,26 @@ export async function embedQuery(query: string): Promise<number[]> {
   const [vector] = await embed([query], "RETRIEVAL_QUERY");
   return vector;
 }
+
+export async function validateGeminiApiKey(apiKey: string): Promise<void> {
+  const config = await loadConfig();
+  const validationClient = new GoogleGenAI({ apiKey });
+
+  try {
+    const response = await validationClient.models.embedContent({
+      model: config.embeddingModel,
+      contents: ["ownsearch key validation"],
+      config: {
+        taskType: "RETRIEVAL_QUERY",
+        outputDimensionality: config.vectorSize
+      }
+    });
+
+    if (!response.embeddings?.length || !response.embeddings[0]?.values?.length) {
+      throw new OwnSearchError("Gemini key validation returned no embeddings.");
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new OwnSearchError(`Gemini API key validation failed. ${message}`);
+  }
+}

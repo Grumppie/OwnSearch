@@ -20,7 +20,7 @@ import {
   saveGeminiApiKey
 } from "./config.js";
 import { OwnSearchError } from "./errors.js";
-import { embedQuery } from "./gemini.js";
+import { embedQuery, validateGeminiApiKey } from "./gemini.js";
 import { indexPath } from "./indexer.js";
 import { createStore } from "./qdrant.js";
 
@@ -191,8 +191,11 @@ async function promptForGeminiKey(): Promise<boolean> {
   });
 
   try {
-    console.log(`Generate a Gemini API key here: ${GEMINI_API_KEY_URL}`);
-    console.log(`OwnSearch will save it to ${getEnvPath()}`);
+    console.log(`OwnSearch needs a Gemini API key for indexing and search.`);
+    console.log(`Open Google AI Studio here: ${GEMINI_API_KEY_URL}`);
+    console.log(`OwnSearch will save the key to ${getEnvPath()}`);
+    openGeminiKeyPage();
+    await rl.question("Press Enter after the AI Studio page is open and you are ready to paste the key: ");
 
     for (;;) {
       const apiKey = (await rl.question("Paste GEMINI_API_KEY and press Enter (Ctrl+C to cancel): ")).trim();
@@ -201,12 +204,51 @@ async function promptForGeminiKey(): Promise<boolean> {
         continue;
       }
 
-      await saveGeminiApiKey(apiKey);
       process.env.GEMINI_API_KEY = apiKey;
+      process.env.GOOGLE_API_KEY = apiKey;
+
+      process.stdout.write("Validating key with Gemini...");
+      try {
+        await validateGeminiApiKey(apiKey);
+        process.stdout.write(" ok\n");
+      } catch (error) {
+        process.stdout.write(" failed\n");
+        console.log(error instanceof Error ? error.message : String(error));
+        continue;
+      }
+
+      await saveGeminiApiKey(apiKey);
       return true;
     }
   } finally {
     rl.close();
+  }
+}
+
+function openGeminiKeyPage(): void {
+  try {
+    if (process.platform === "win32") {
+      spawn("cmd", ["/c", "start", "", GEMINI_API_KEY_URL], {
+        stdio: "ignore",
+        detached: true
+      }).unref();
+      return;
+    }
+
+    if (process.platform === "darwin") {
+      spawn("open", [GEMINI_API_KEY_URL], {
+        stdio: "ignore",
+        detached: true
+      }).unref();
+      return;
+    }
+
+    spawn("xdg-open", [GEMINI_API_KEY_URL], {
+      stdio: "ignore",
+      detached: true
+    }).unref();
+  } catch {
+    // Best-effort only. Setup still prints the URL for manual opening.
   }
 }
 

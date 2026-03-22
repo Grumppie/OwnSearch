@@ -123,8 +123,9 @@ ownsearch serve-mcp
 On first run, `ownsearch setup` can:
 
 - prompt for `GEMINI_API_KEY`
-- link users to Google AI Studio
+- open Google AI Studio automatically
 - save the key to `~/.ownsearch/.env`
+- validate the pasted key before saving it
 - ask whether setup output should be optimized for a human or an agent
 - print exact next commands for CLI and MCP usage
 - optionally print an MCP config snippet for a selected agent
