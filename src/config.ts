@@ -1,6 +1,8 @@
+import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import dotenv from "dotenv";
 import {
   CONFIG_DIR_NAME,
   CONFIG_FILE_NAME,
@@ -40,8 +42,27 @@ export function getConfigPath(): string {
   return path.join(getConfigDir(), CONFIG_FILE_NAME);
 }
 
+export function getEnvPath(): string {
+  return path.join(getConfigDir(), ".env");
+}
+
 export async function ensureConfigDir(): Promise<void> {
   await fs.mkdir(getConfigDir(), { recursive: true });
+}
+
+export function loadOwnSearchEnv(): void {
+  for (const envPath of [path.resolve(process.cwd(), ".env"), getEnvPath()]) {
+    if (!fsSync.existsSync(envPath)) {
+      continue;
+    }
+
+    const parsed = dotenv.parse(fsSync.readFileSync(envPath, "utf8"));
+    for (const [key, value] of Object.entries(parsed)) {
+      if (process.env[key] === undefined) {
+        process.env[key] = value;
+      }
+    }
+  }
 }
 
 export async function loadConfig(): Promise<OwnSearchConfig> {
@@ -71,6 +92,11 @@ export async function loadConfig(): Promise<OwnSearchConfig> {
 export async function saveConfig(config: OwnSearchConfig): Promise<void> {
   await ensureConfigDir();
   await fs.writeFile(getConfigPath(), `${JSON.stringify(config, null, 2)}\n`, "utf8");
+}
+
+export async function saveGeminiApiKey(apiKey: string): Promise<void> {
+  await ensureConfigDir();
+  await fs.writeFile(getEnvPath(), `GEMINI_API_KEY=${apiKey.trim()}\n`, "utf8");
 }
 
 export function createRootDefinition(rootPath: string, name?: string): RootDefinition {

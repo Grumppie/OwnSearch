@@ -1,22 +1,60 @@
 #!/usr/bin/env node
-import "dotenv/config";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import readline from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { buildContextBundle } from "./context.js";
 import { ensureQdrantDocker } from "./docker.js";
-import { deleteRootDefinition, findRoot, getConfigPath, listRoots, loadConfig } from "./config.js";
+import {
+  deleteRootDefinition,
+  findRoot,
+  getConfigPath,
+  getEnvPath,
+  listRoots,
+  loadConfig,
+  loadOwnSearchEnv,
+  saveGeminiApiKey
+} from "./config.js";
 import { OwnSearchError } from "./errors.js";
 import { embedQuery } from "./gemini.js";
 import { indexPath } from "./indexer.js";
 import { createStore } from "./qdrant.js";
+
+loadOwnSearchEnv();
 
 const program = new Command();
 
 function requireGeminiKey(): void {
   if (!process.env.GEMINI_API_KEY) {
     throw new OwnSearchError("Set GEMINI_API_KEY before running OwnSearch.");
+  }
+}
+
+async function promptForGeminiKey(): Promise<boolean> {
+  if (process.env.GEMINI_API_KEY || !process.stdin.isTTY || !process.stdout.isTTY) {
+    return Boolean(process.env.GEMINI_API_KEY);
+  }
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  try {
+    const apiKey = (await rl.question(
+      `Enter GEMINI_API_KEY to save in ${getEnvPath()} (leave blank to skip): `
+    )).trim();
+
+    if (!apiKey) {
+      return false;
+    }
+
+    await saveGeminiApiKey(apiKey);
+    process.env.GEMINI_API_KEY = apiKey;
+    return true;
+  } finally {
+    rl.close();
   }
 }
 
@@ -31,13 +69,16 @@ program
   .action(async () => {
     const config = await loadConfig();
     const result = await ensureQdrantDocker();
+    const geminiApiKeyPresent = await promptForGeminiKey();
     console.log(JSON.stringify({
       configPath: getConfigPath(),
+      envPath: getEnvPath(),
       qdrantUrl: config.qdrantUrl,
-      qdrantStarted: result.started
+      qdrantStarted: result.started,
+      geminiApiKeyPresent
     }, null, 2));
-    if (!process.env.GEMINI_API_KEY) {
-      console.log("GEMINI_API_KEY is not set. Indexing and search will require it later.");
+    if (!geminiApiKeyPresent) {
+      console.log(`GEMINI_API_KEY is not set. Re-run setup or add it to ${getEnvPath()} before indexing or search.`);
     }
   });
 
@@ -162,6 +203,7 @@ program
 
     console.log(JSON.stringify({
       configPath: getConfigPath(),
+      envPath: getEnvPath(),
       geminiApiKeyPresent: Boolean(process.env.GEMINI_API_KEY),
       qdrantUrl: config.qdrantUrl,
       qdrantReachable,

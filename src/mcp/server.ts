@@ -1,14 +1,15 @@
 #!/usr/bin/env node
-import "dotenv/config";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { buildContextBundle } from "../context.js";
-import { deleteRootDefinition, findRoot, loadConfig } from "../config.js";
+import { deleteRootDefinition, findRoot, loadConfig, loadOwnSearchEnv } from "../config.js";
 import { OwnSearchError } from "../errors.js";
 import { embedQuery } from "../gemini.js";
 import { indexPath } from "../indexer.js";
 import { createStore } from "../qdrant.js";
+
+loadOwnSearchEnv();
 
 function asText(result: unknown) {
   return {
