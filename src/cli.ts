@@ -192,6 +192,7 @@ async function promptForGeminiKey(): Promise<boolean> {
 
   try {
     console.log(`OwnSearch needs a Gemini API key for indexing and search.`);
+    console.log("Gemini API usage is governed by Google’s current free-tier limits, quotas, and pricing.");
     console.log(`Open Google AI Studio here: ${GEMINI_API_KEY_URL}`);
     console.log(`OwnSearch will save the key to ${getEnvPath()}`);
     openGeminiKeyPage();

@@ -93,6 +93,8 @@ Installation:
 npm install -g ownsearch
 ```
 
+Gemini API usage is governed by Google’s current free-tier limits, quotas, and pricing.
+
 Deployment checklist:
 
 ```bash
@@ -129,6 +131,8 @@ On first run, `ownsearch setup` can:
 - ask whether setup output should be optimized for a human or an agent
 - print exact next commands for CLI and MCP usage
 - optionally print an MCP config snippet for a selected agent
+
+Gemini API usage is governed by Google’s current free-tier limits, quotas, and pricing.
 
 Useful setup modes:
 
