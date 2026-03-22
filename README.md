@@ -146,6 +146,7 @@ On first run, `ownsearch setup` can:
 - save the key to `~/.ownsearch/.env`
 - validate the pasted key before saving it
 - ask whether setup output should be optimized for a human or an agent
+- explain that the MCP server exposes built-in retrieval guidance for agents
 - print exact next commands for CLI and MCP usage
 - offer to install MCP config automatically for supported agents
 - fall back to a manual config snippet inside setup if automatic installation is not supported or fails

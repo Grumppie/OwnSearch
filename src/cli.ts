@@ -42,7 +42,7 @@ const SUPPORTED_AGENTS = [
 ] as const;
 type SupportedAgent = (typeof SUPPORTED_AGENTS)[number];
 const SHOULD_SHOW_PROGRESS = process.stderr.isTTY;
-const PACKAGE_VERSION = "0.1.7";
+const PACKAGE_VERSION = "0.1.8";
 const AUTO_INSTALL_AGENTS = new Set<InstallableAgent>([
   "codex",
   "continue",
@@ -577,6 +577,10 @@ function printAgentInstallSummary(result: {
   if (result.command) {
     console.log(`  Installer command: ${result.command}`);
   }
+  console.log("  MCP guidance is built in:");
+  console.log("    resource: ownsearch://skills/retrieval");
+  console.log("    prompt: ownsearch-retrieval-guide");
+  console.log("    tool fallback: get_retrieval_skill");
 }
 
 async function maybeInstallAgentConfig(agent: SupportedAgent): Promise<void> {
@@ -640,6 +644,12 @@ function printSetupSummary(input: {
   } else {
     console.log("  Gemini API key: missing");
   }
+
+  console.log("  MCP guidance:");
+  console.log("    OwnSearch exposes a retrieval resource, prompt, and fallback tool so attached agents can learn the correct retrieval workflow immediately.");
+  console.log("    resource: ownsearch://skills/retrieval");
+  console.log("    prompt: ownsearch-retrieval-guide");
+  console.log("    tool fallback: get_retrieval_skill");
 }
 
 function printAgentSetupSummary(input: {
@@ -659,6 +669,11 @@ function printAgentSetupSummary(input: {
   console.log(`  Qdrant endpoint: ${input.qdrantUrl}`);
   console.log(`  Qdrant status: ${input.qdrantStarted ? "started during setup" : "already reachable"}`);
   console.log(`  Gemini key: ${input.geminiApiKeyPresent ? `ready (${input.geminiApiKeySource})` : "missing"}`);
+  console.log("  MCP guidance is built in:");
+  console.log("    resource: ownsearch://skills/retrieval");
+  console.log("    prompt: ownsearch-retrieval-guide");
+  console.log("    tool fallback: get_retrieval_skill");
+  console.log("  Attached agents should load the resource or prompt first, then use literal_search, search_context, or deep_search_context as needed.");
 }
 
 program
