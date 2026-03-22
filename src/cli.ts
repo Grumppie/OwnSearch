@@ -28,10 +28,31 @@ loadOwnSearchEnv();
 const program = new Command();
 const PACKAGE_NAME = "ownsearch";
 const GEMINI_API_KEY_URL = "https://aistudio.google.com/apikey";
+const SUPPORTED_AGENTS = ["codex", "claude-desktop", "cursor"] as const;
+type SupportedAgent = (typeof SUPPORTED_AGENTS)[number];
 
 function requireGeminiKey(): void {
   if (!process.env.GEMINI_API_KEY) {
     throw new OwnSearchError("Set GEMINI_API_KEY before running OwnSearch.");
+  }
+}
+
+function buildAgentConfig(agent: SupportedAgent): Record<string, unknown> {
+  const config = {
+    command: "npx",
+    args: ["-y", PACKAGE_NAME, "serve-mcp"],
+    env: {
+      GEMINI_API_KEY: "${GEMINI_API_KEY}"
+    }
+  };
+
+  switch (agent) {
+    case "codex":
+    case "claude-desktop":
+    case "cursor":
+      return { ownsearch: config };
+    default:
+      throw new OwnSearchError(`Unsupported agent: ${agent}`);
   }
 }
 
@@ -118,6 +139,57 @@ function printSetupNextSteps(): void {
   console.log("    ownsearch print-agent-config cursor");
 }
 
+async function promptForAgentChoice(): Promise<SupportedAgent | undefined> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return undefined;
+  }
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  try {
+    console.log("");
+    console.log("Connect to an agent now?");
+    console.log("  1. codex");
+    console.log("  2. claude-desktop");
+    console.log("  3. cursor");
+    console.log("  4. skip");
+
+    for (;;) {
+      const answer = (await rl.question("Select 1-4: ")).trim().toLowerCase();
+
+      switch (answer) {
+        case "1":
+        case "codex":
+          return "codex";
+        case "2":
+        case "claude-desktop":
+        case "claude":
+          return "claude-desktop";
+        case "3":
+        case "cursor":
+          return "cursor";
+        case "4":
+        case "skip":
+        case "":
+          return undefined;
+        default:
+          console.log("Enter 1, 2, 3, or 4.");
+      }
+    }
+  } finally {
+    rl.close();
+  }
+}
+
+function printAgentConfigSnippet(agent: SupportedAgent): void {
+  console.log("");
+  console.log(`MCP config for ${agent}:`);
+  console.log(JSON.stringify(buildAgentConfig(agent), null, 2));
+}
+
 program
   .name("ownsearch")
   .description("Gemini-powered local search MCP server backed by Qdrant.")
@@ -145,6 +217,10 @@ program
     }
 
     printSetupNextSteps();
+    const agent = await promptForAgentChoice();
+    if (agent) {
+      printAgentConfigSnippet(agent);
+    }
   });
 
 program
@@ -304,23 +380,12 @@ program
   .argument("<agent>", "codex | claude-desktop | cursor")
   .description("Print an MCP config snippet for a supported agent.")
   .action(async (agent: string) => {
-    const config = {
-      command: "npx",
-      args: ["-y", PACKAGE_NAME, "serve-mcp"],
-      env: {
-        GEMINI_API_KEY: "${GEMINI_API_KEY}"
-      }
-    };
-
-    switch (agent) {
-      case "codex":
-      case "claude-desktop":
-      case "cursor":
-        console.log(JSON.stringify({ ownsearch: config }, null, 2));
-        return;
-      default:
-        throw new OwnSearchError(`Unsupported agent: ${agent}`);
+    if (SUPPORTED_AGENTS.includes(agent as SupportedAgent)) {
+      console.log(JSON.stringify(buildAgentConfig(agent as SupportedAgent), null, 2));
+      return;
     }
+
+    throw new OwnSearchError(`Unsupported agent: ${agent}`);
   });
 
 program.parseAsync(process.argv).catch((error) => {
