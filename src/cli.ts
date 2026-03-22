@@ -8,12 +8,14 @@ import { buildContextBundle } from "./context.js";
 import { ensureQdrantDocker } from "./docker.js";
 import {
   deleteRootDefinition,
+  getCwdEnvPath,
   findRoot,
   getConfigPath,
   getEnvPath,
   listRoots,
   loadConfig,
   loadOwnSearchEnv,
+  readEnvFile,
   saveGeminiApiKey
 } from "./config.js";
 import { OwnSearchError } from "./errors.js";
@@ -25,6 +27,7 @@ loadOwnSearchEnv();
 
 const program = new Command();
 const PACKAGE_NAME = "ownsearch";
+const GEMINI_API_KEY_URL = "https://aistudio.google.com/apikey";
 
 function requireGeminiKey(): void {
   if (!process.env.GEMINI_API_KEY) {
@@ -33,8 +36,8 @@ function requireGeminiKey(): void {
 }
 
 async function promptForGeminiKey(): Promise<boolean> {
-  if (process.env.GEMINI_API_KEY || !process.stdin.isTTY || !process.stdout.isTTY) {
-    return Boolean(process.env.GEMINI_API_KEY);
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return false;
   }
 
   const rl = readline.createInterface({
@@ -43,20 +46,76 @@ async function promptForGeminiKey(): Promise<boolean> {
   });
 
   try {
-    const apiKey = (await rl.question(
-      `Enter GEMINI_API_KEY to save in ${getEnvPath()} (leave blank to skip): `
-    )).trim();
+    console.log(`Generate a Gemini API key here: ${GEMINI_API_KEY_URL}`);
+    console.log(`OwnSearch will save it to ${getEnvPath()}`);
 
-    if (!apiKey) {
-      return false;
+    for (;;) {
+      const apiKey = (await rl.question("Paste GEMINI_API_KEY and press Enter (Ctrl+C to cancel): ")).trim();
+      if (!apiKey) {
+        console.log("GEMINI_API_KEY is required for indexing and search.");
+        continue;
+      }
+
+      await saveGeminiApiKey(apiKey);
+      process.env.GEMINI_API_KEY = apiKey;
+      return true;
     }
-
-    await saveGeminiApiKey(apiKey);
-    process.env.GEMINI_API_KEY = apiKey;
-    return true;
   } finally {
     rl.close();
   }
+}
+
+function getGeminiApiKeySource(): "ownsearch-env" | "cwd-env" | "process-env" | "missing" {
+  if (readEnvFile(getEnvPath()).GEMINI_API_KEY) {
+    return "ownsearch-env";
+  }
+
+  if (readEnvFile(getCwdEnvPath()).GEMINI_API_KEY) {
+    return "cwd-env";
+  }
+
+  if (process.env.GEMINI_API_KEY) {
+    return "process-env";
+  }
+
+  return "missing";
+}
+
+async function ensureManagedGeminiKey(): Promise<{ present: boolean; source: string; savedToManagedEnv: boolean }> {
+  const source = getGeminiApiKeySource();
+
+  if (source === "ownsearch-env") {
+    return { present: true, source, savedToManagedEnv: false };
+  }
+
+  if (process.env.GEMINI_API_KEY) {
+    await saveGeminiApiKey(process.env.GEMINI_API_KEY);
+    return { present: true, source, savedToManagedEnv: true };
+  }
+
+  const prompted = await promptForGeminiKey();
+  return {
+    present: prompted,
+    source: prompted ? "prompt" : "missing",
+    savedToManagedEnv: prompted
+  };
+}
+
+function printSetupNextSteps(): void {
+  console.log("");
+  console.log("Next commands:");
+  console.log("  CLI indexing:");
+  console.log("    ownsearch index C:\\path\\to\\folder --name my-folder");
+  console.log("  CLI search:");
+  console.log("    ownsearch search \"your question here\" --limit 5");
+  console.log("  CLI grounded context:");
+  console.log("    ownsearch search-context \"your question here\" --limit 8 --max-chars 12000");
+  console.log("  MCP server for agents:");
+  console.log("    ownsearch serve-mcp");
+  console.log("  Agent config snippets:");
+  console.log("    ownsearch print-agent-config codex");
+  console.log("    ownsearch print-agent-config claude-desktop");
+  console.log("    ownsearch print-agent-config cursor");
 }
 
 program
@@ -70,17 +129,22 @@ program
   .action(async () => {
     const config = await loadConfig();
     const result = await ensureQdrantDocker();
-    const geminiApiKeyPresent = await promptForGeminiKey();
+    const gemini = await ensureManagedGeminiKey();
     console.log(JSON.stringify({
       configPath: getConfigPath(),
       envPath: getEnvPath(),
       qdrantUrl: config.qdrantUrl,
       qdrantStarted: result.started,
-      geminiApiKeyPresent
+      geminiApiKeyPresent: gemini.present,
+      geminiApiKeySource: gemini.source,
+      geminiApiKeySavedToManagedEnv: gemini.savedToManagedEnv
     }, null, 2));
-    if (!geminiApiKeyPresent) {
+    if (!gemini.present) {
       console.log(`GEMINI_API_KEY is not set. Re-run setup or add it to ${getEnvPath()} before indexing or search.`);
+      return;
     }
+
+    printSetupNextSteps();
   });
 
 program
@@ -206,6 +270,7 @@ program
       configPath: getConfigPath(),
       envPath: getEnvPath(),
       geminiApiKeyPresent: Boolean(process.env.GEMINI_API_KEY),
+      geminiApiKeySource: getGeminiApiKeySource(),
       qdrantUrl: config.qdrantUrl,
       qdrantReachable,
       collection: config.qdrantCollection,

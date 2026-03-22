@@ -46,12 +46,16 @@ export function getEnvPath(): string {
   return path.join(getConfigDir(), ".env");
 }
 
+export function getCwdEnvPath(): string {
+  return path.resolve(process.cwd(), ".env");
+}
+
 export async function ensureConfigDir(): Promise<void> {
   await fs.mkdir(getConfigDir(), { recursive: true });
 }
 
 export function loadOwnSearchEnv(): void {
-  for (const envPath of [path.resolve(process.cwd(), ".env"), getEnvPath()]) {
+  for (const envPath of [getCwdEnvPath(), getEnvPath()]) {
     if (!fsSync.existsSync(envPath)) {
       continue;
     }
@@ -63,6 +67,14 @@ export function loadOwnSearchEnv(): void {
       }
     }
   }
+}
+
+export function readEnvFile(envPath: string): Record<string, string> {
+  if (!fsSync.existsSync(envPath)) {
+    return {};
+  }
+
+  return dotenv.parse(fsSync.readFileSync(envPath, "utf8"));
 }
 
 export async function loadConfig(): Promise<OwnSearchConfig> {

@@ -42,7 +42,7 @@ ownsearch search-context "what is this repo about?" --limit 8 --max-chars 12000
 ownsearch serve-mcp
 ```
 
-On first run, `ownsearch setup` can prompt for `GEMINI_API_KEY` and save it to `~/.ownsearch/.env`, which is then reused automatically by later CLI and MCP runs.
+On first run, `ownsearch setup` can prompt for `GEMINI_API_KEY`, link users to Google AI Studio, and save the key to `~/.ownsearch/.env`, which is then reused automatically by later CLI and MCP runs.
 
 To connect `ownsearch` to a supported agent, print a config snippet for your client:
 
@@ -68,7 +68,7 @@ node dist/cli.js serve-mcp
 ## CLI commands
 
 - `ownsearch setup`
-  Starts or reconnects to the local Qdrant Docker container, creates local config, and can save `GEMINI_API_KEY` into `~/.ownsearch/.env`.
+  Starts or reconnects to the local Qdrant Docker container, creates local config, persists `GEMINI_API_KEY` into `~/.ownsearch/.env`, and prints the next exact commands for CLI and MCP usage.
 - `ownsearch doctor`
   Checks config, Gemini key presence, Qdrant connectivity, and active collection settings.
 - `ownsearch index <folder> --name <name>`
