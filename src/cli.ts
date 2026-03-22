@@ -24,6 +24,7 @@ import { createStore } from "./qdrant.js";
 loadOwnSearchEnv();
 
 const program = new Command();
+const PACKAGE_NAME = "ownsearch";
 
 function requireGeminiKey(): void {
   if (!process.env.GEMINI_API_KEY) {
@@ -240,7 +241,7 @@ program
   .action(async (agent: string) => {
     const config = {
       command: "npx",
-      args: ["-y", "ownsearch", "serve-mcp"],
+      args: ["-y", PACKAGE_NAME, "serve-mcp"],
       env: {
         GEMINI_API_KEY: "${GEMINI_API_KEY}"
       }
