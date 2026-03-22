@@ -17,7 +17,7 @@ import { buildContextBundle } from "../context.js";
 loadOwnSearchEnv();
 
 const BUNDLED_SKILL_NAME = "ownsearch-rag-search";
-const SERVER_VERSION = "0.1.4";
+const SERVER_VERSION = "0.1.5";
 
 function asText(result: unknown) {
   return {

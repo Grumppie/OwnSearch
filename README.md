@@ -25,6 +25,12 @@ Most agents waste time and tokens when they do one of two things:
 - giving agents a structured way to fetch only the chunks they need
 - improving answer quality with reranking, deduplication, and grounded chunk access
 
+It uses a hybrid retrieval surface rather than treating embeddings as a full replacement for exact search:
+
+- `literal_search` for exact names, titles, IDs, and quoted phrases
+- `search_context` for the normal fast semantic path
+- `deep_search_context` for archive-style, multi-document, or ambiguity-heavy questions
+
 ## Core use cases
 
 `ownsearch` is a good fit when an agent needs to work over:
@@ -66,6 +72,7 @@ What is already strong in the current package:
 - support for common text document formats
 - large plain text and code files are no longer blocked by the extracted-document size cap
 - repeatable smoke validation for mixed text corpora
+- a hybrid retrieval interface that works better for agents than embeddings alone
 
 ## V1 supported document types
 
@@ -117,8 +124,10 @@ ownsearch setup
 ownsearch doctor
 ownsearch index ./docs --name docs
 ownsearch list-roots
+ownsearch literal-search "exact title or phrase" --limit 10
 ownsearch search "what is this repo about?" --limit 5
 ownsearch search-context "what is this repo about?" --limit 8 --max-chars 12000
+ownsearch deep-search-context "what is this repo about?" --final-limit 10 --max-chars 16000
 ownsearch serve-mcp
 ```
 
@@ -201,7 +210,7 @@ ownsearch print-skill ownsearch-rag-search
 The skill is intended to help an agent:
 
 - rewrite weak user requests into stronger retrieval queries
-- decide when to use `search_context` vs `search` vs `get_chunks`
+- decide when to use `literal_search` vs `search_context` vs `deep_search_context` vs `get_chunks`
 - recover from poor first-pass retrieval
 - avoid duplicate-heavy answer synthesis
 - stay grounded when retrieval is probabilistic
@@ -274,6 +283,25 @@ That smoke run currently validates:
 - `.pdf` retrieval
 - large plain text file bypass of the extracted-document byte cap
 
+The repo also includes comparative retrieval evals:
+
+- `scripts/eval-grep-vs-ownsearch.mts`
+- `scripts/eval-adversarial-retrieval.mts`
+
+These evals are meant to expose where:
+
+- plain `grep` is still best
+- shallow semantic retrieval is too weak
+- deeper retrieval improves agent-facing RAG quality
+
+On the current Mireglass benchmark corpus, the latest comparative run produced:
+
+- `deep`: `69.2` average score
+- `grep`: `65.67` average score
+- `shallow`: `65.09` average score
+
+The adversarial eval also showed that the current deep path reduced known noise-file leakage the most in this corpus.
+
 ## Limitations
 
 This package is deploy-ready for text-first corpora, but it is not universal document intelligence.
@@ -294,6 +322,7 @@ Operational limitations:
 - duplicate-heavy corpora are improved by current reranking, but not fully solved for all edge cases
 - scanned or low-quality PDFs may require OCR before indexing
 - `literal_search` depends on `ripgrep` being available on the local machine
+- exact literal lookup can still beat semantic retrieval on some questions, so agents should use the hybrid flow instead of embeddings alone
 
 ## Future scope
 
