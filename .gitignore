@@ -3,5 +3,5 @@ dist
 .ownsearch
 .env
 *.tgz
-smoke-*
+/smoke-*
 _testing
