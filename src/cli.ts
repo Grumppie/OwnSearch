@@ -406,11 +406,9 @@ function printSetupNextSteps(): void {
   console.log("     ownsearch deep-search-context \"your question here\" --final-limit 10 --max-chars 16000");
   console.log("  6. Start the MCP server:");
   console.log("     ownsearch serve-mcp");
-  console.log("  7. Print agent-specific config:");
-  console.log("     ownsearch print-agent-config codex");
-  console.log("  8. Let OwnSearch install MCP config for a supported agent:");
+  console.log("  7. Let OwnSearch install MCP config for a supported agent:");
   console.log("     ownsearch install-agent-config codex");
-  console.log("  9. Print the bundled retrieval skill:");
+  console.log("  8. Print the bundled retrieval skill:");
   console.log(`     ownsearch print-skill ${BUNDLED_SKILL_NAME}`);
   console.log("");
   console.log("Docker requirement");
@@ -432,9 +430,7 @@ function printAgentSetupNextSteps(): void {
   console.log("    ownsearch deep-search-context \"your question here\" --final-limit 10 --max-chars 16000");
   console.log("  Start the MCP server:");
   console.log("    ownsearch serve-mcp");
-  console.log("  Print MCP config for the host agent:");
-  console.log("    ownsearch print-agent-config codex");
-  console.log("  Or let OwnSearch install MCP config automatically:");
+  console.log("  Let OwnSearch install MCP config automatically:");
   console.log("    ownsearch install-agent-config codex");
   console.log("");
   console.log("Docker requirement");
@@ -953,26 +949,6 @@ program
     const { installAgentConfig } = await loadAgentInstallModule();
     const result = await installAgentConfig(agent);
     printAgentInstallSummary(result);
-  });
-
-program
-  .command("print-agent-config")
-  .argument("<agent>", SUPPORTED_AGENTS.join(" | "))
-  .description("Print an MCP config snippet for a supported agent.")
-  .option("--json", "Print the full machine-readable payload")
-  .action(async (agent: string, options: { json?: boolean }) => {
-    if (SUPPORTED_AGENTS.includes(agent as SupportedAgent)) {
-      const payload = buildAgentConfig(agent as SupportedAgent);
-      if (options.json) {
-        console.log(JSON.stringify(payload, null, 2));
-        return;
-      }
-
-      printAgentConfigSnippet(agent as SupportedAgent);
-      return;
-    }
-
-    throw new OwnSearchError(`Unsupported agent: ${agent}`);
   });
 
 program

@@ -141,7 +141,7 @@ On first run, `ownsearch setup` can:
 - ask whether setup output should be optimized for a human or an agent
 - print exact next commands for CLI and MCP usage
 - offer to install MCP config automatically for supported agents
-- optionally print an MCP config snippet for a selected agent
+- fall back to a manual config snippet inside setup if automatic installation is not supported or fails
 
 Gemini API usage is governed by Google’s current free-tier limits, quotas, and pricing.
 
@@ -172,17 +172,16 @@ It is less suitable when:
 
 ## Agent integration
 
-To print MCP config snippets:
+To let OwnSearch install MCP config automatically:
 
 ```bash
-ownsearch print-agent-config codex
-ownsearch print-agent-config cursor
-ownsearch print-agent-config vscode
-ownsearch print-agent-config github-copilot
-ownsearch print-agent-config copilot-cli
-ownsearch print-agent-config windsurf
-ownsearch print-agent-config continue
-ownsearch print-agent-config claude-desktop
+ownsearch install-agent-config codex
+ownsearch install-agent-config cursor
+ownsearch install-agent-config vscode
+ownsearch install-agent-config github-copilot
+ownsearch install-agent-config copilot-cli
+ownsearch install-agent-config windsurf
+ownsearch install-agent-config continue
 ```
 
 Supported config targets currently include:
@@ -198,16 +197,9 @@ Supported config targets currently include:
 
 Notes:
 
-- `claude-desktop` currently returns guidance rather than a raw JSON snippet because current Claude Desktop docs prefer desktop extensions (`.mcpb`) over manual JSON server configs
-- all other supported targets return concrete MCP config payloads
-- for supported agents, OwnSearch can also install the MCP server automatically without removing existing MCP servers:
-  - `ownsearch install-agent-config codex`
-  - `ownsearch install-agent-config cursor`
-  - `ownsearch install-agent-config vscode`
-  - `ownsearch install-agent-config github-copilot`
-  - `ownsearch install-agent-config windsurf`
-  - `ownsearch install-agent-config continue`
-  - `ownsearch install-agent-config copilot-cli`
+- `claude-desktop` is not auto-installed because current Claude Desktop docs prefer desktop extensions (`.mcpb`) over manual JSON server configs
+- supported agents are installed with a safe merge that preserves existing MCP servers
+- if automatic installation is not supported or fails, setup falls back to showing a manual config snippet
 
 ## Bundled skill
 
@@ -249,8 +241,6 @@ The skill is intended to help an agent:
   Shows collection status and vector configuration.
 - `ownsearch serve-mcp`
   Starts the stdio MCP server.
-- `ownsearch print-agent-config <agent>`
-  Prints MCP config snippets or platform guidance.
 - `ownsearch install-agent-config <agent>`
   Safely merges OwnSearch into a supported agent MCP config when the platform can be updated automatically.
 - `ownsearch print-skill [skill]`
