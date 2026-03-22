@@ -4,13 +4,17 @@ import { loadConfig } from "./config.js";
 import { OwnSearchError } from "./errors.js";
 
 const execFileAsync = promisify(execFile);
+const DOCKER_DESKTOP_WINDOWS_URL = "https://docs.docker.com/desktop/setup/install/windows-install/";
+const DOCKER_DESKTOP_OVERVIEW_URL = "https://docs.docker.com/desktop/";
 
 async function runDocker(args: string[]): Promise<string> {
   try {
     const { stdout } = await execFileAsync("docker", args, { windowsHide: true });
     return stdout.trim();
   } catch (error) {
-    throw new OwnSearchError("Docker is required for Qdrant setup. Install Docker and ensure `docker` is on PATH.");
+    throw new OwnSearchError(
+      `Docker is required for Qdrant setup. Install Docker Desktop and ensure \`docker\` is on PATH. Windows install guide: ${DOCKER_DESKTOP_WINDOWS_URL} General Docker Desktop docs: ${DOCKER_DESKTOP_OVERVIEW_URL}`
+    );
   }
 }
 

@@ -22,13 +22,17 @@ import {
 import { OwnSearchError } from "./errors.js";
 import { embedQuery, validateGeminiApiKey } from "./gemini.js";
 import { indexPath } from "./indexer.js";
+import { literalSearch } from "./literal-search.js";
 import { createStore } from "./qdrant.js";
+import { deepSearchContext } from "./retrieval.js";
 
 loadOwnSearchEnv();
 
 const program = new Command();
 const PACKAGE_NAME = "ownsearch";
 const GEMINI_API_KEY_URL = "https://aistudio.google.com/apikey";
+const DOCKER_DESKTOP_WINDOWS_URL = "https://docs.docker.com/desktop/setup/install/windows-install/";
+const DOCKER_DESKTOP_OVERVIEW_URL = "https://docs.docker.com/desktop/";
 const BUNDLED_SKILL_NAME = "ownsearch-rag-search";
 const SUPPORTED_AGENTS = [
   "codex",
@@ -328,16 +332,25 @@ function printSetupNextSteps(): void {
   console.log("Next steps");
   console.log("  1. Index a folder:");
   console.log("     ownsearch index C:\\path\\to\\folder --name my-folder");
-  console.log("  2. Test search in the CLI:");
+  console.log("  2. Test exact-match search in the CLI:");
+  console.log("     ownsearch literal-search \"exact title or phrase\" --limit 10");
+  console.log("  3. Test semantic search in the CLI:");
   console.log("     ownsearch search \"your question here\" --limit 5");
-  console.log("  3. Get grounded context for an agent:");
+  console.log("  4. Get grounded context for an agent:");
   console.log("     ownsearch search-context \"your question here\" --limit 8 --max-chars 12000");
-  console.log("  4. Start the MCP server:");
+  console.log("  5. Use deeper retrieval for archive-style questions:");
+  console.log("     ownsearch deep-search-context \"your question here\" --final-limit 10 --max-chars 16000");
+  console.log("  6. Start the MCP server:");
   console.log("     ownsearch serve-mcp");
-  console.log("  5. Print agent-specific config:");
+  console.log("  7. Print agent-specific config:");
   console.log("     ownsearch print-agent-config codex");
-  console.log("  6. Print the bundled retrieval skill:");
+  console.log("  8. Print the bundled retrieval skill:");
   console.log(`     ownsearch print-skill ${BUNDLED_SKILL_NAME}`);
+  console.log("");
+  console.log("Docker requirement");
+  console.log("  OwnSearch requires Docker Desktop so it can run Qdrant locally.");
+  console.log(`  Windows install: ${DOCKER_DESKTOP_WINDOWS_URL}`);
+  console.log(`  Docker docs: ${DOCKER_DESKTOP_OVERVIEW_URL}`);
 }
 
 function printAgentSetupNextSteps(): void {
@@ -345,12 +358,21 @@ function printAgentSetupNextSteps(): void {
   console.log("Agent-ready commands");
   console.log("  Index an approved folder:");
   console.log("    ownsearch index C:\\path\\to\\folder --name my-folder");
+  console.log("  For exact names, titles, IDs, or quoted strings:");
+  console.log("    ownsearch literal-search \"exact text here\" --limit 10");
   console.log("  Retrieve grounded context:");
   console.log("    ownsearch search-context \"your question here\" --limit 8 --max-chars 12000");
+  console.log("  Use deeper retrieval for ambiguous or multi-document questions:");
+  console.log("    ownsearch deep-search-context \"your question here\" --final-limit 10 --max-chars 16000");
   console.log("  Start the MCP server:");
   console.log("    ownsearch serve-mcp");
   console.log("  Print MCP config for the host agent:");
   console.log("    ownsearch print-agent-config codex");
+  console.log("");
+  console.log("Docker requirement");
+  console.log("  OwnSearch requires Docker Desktop so it can run Qdrant locally.");
+  console.log(`  Windows install: ${DOCKER_DESKTOP_WINDOWS_URL}`);
+  console.log(`  Docker docs: ${DOCKER_DESKTOP_OVERVIEW_URL}`);
 }
 
 async function promptForAgentChoice(): Promise<SupportedAgent | undefined> {
@@ -460,6 +482,8 @@ function printSetupSummary(input: {
   geminiApiKeySavedToManagedEnv: boolean;
 }): void {
   console.log("OwnSearch setup complete");
+  console.log("  Docker is required because OwnSearch runs Qdrant locally in Docker.");
+  console.log(`  Docker docs: ${DOCKER_DESKTOP_WINDOWS_URL}`);
   console.log(`  Config: ${input.configPath}`);
   console.log(`  API key file: ${input.envPath}`);
   console.log(`  Qdrant: ${input.qdrantUrl} (${input.qdrantStarted ? "started now" : "already running or reachable"})`);
@@ -483,6 +507,8 @@ function printAgentSetupSummary(input: {
   geminiApiKeySource: string;
 }): void {
   console.log("OwnSearch setup ready for agent use");
+  console.log("  Docker is required because OwnSearch runs Qdrant locally in Docker.");
+  console.log(`  Docker docs: ${DOCKER_DESKTOP_WINDOWS_URL}`);
   console.log(`  Config path: ${input.configPath}`);
   console.log(`  Managed env path: ${input.envPath}`);
   console.log(`  Qdrant endpoint: ${input.qdrantUrl}`);
@@ -589,6 +615,29 @@ program
   );
 
 program
+  .command("literal-search")
+  .argument("<query>", "Exact text query")
+  .option("--root-id <rootId...>", "Restrict search to one or more root IDs (repeatable)")
+  .option("--limit <n>", "Max matches (default 20)", (value) => Number(value), 20)
+  .option("--path <substr>", "Filter results to files whose relative path contains this substring")
+  .description("Run grep-style exact text search over indexed roots with ripgrep.")
+  .action(
+    async (
+      query: string,
+      options: { rootId?: string[]; limit: number; path?: string }
+    ) => {
+      const matches = await literalSearch({
+        query,
+        rootIds: options.rootId,
+        limit: Math.max(1, Math.min(options.limit ?? 20, 100)),
+        pathSubstring: options.path
+      });
+
+      console.log(JSON.stringify({ query, matches }, null, 2));
+    }
+  );
+
+program
   .command("search-context")
   .argument("<query>", "Natural language query")
   .option("--root-id <rootId...>", "Restrict search to one or more root IDs (repeatable)")
@@ -615,6 +664,39 @@ program
       );
 
       console.log(JSON.stringify(buildContextBundle(query, hits, Math.max(500, options.maxChars ?? 12000)), null, 2));
+    }
+  );
+
+program
+  .command("deep-search-context")
+  .argument("<query>", "Natural language query")
+  .option("--root-id <rootId...>", "Restrict search to one or more root IDs (repeatable)")
+  .option("--per-query-limit <n>", "Max hits per query variant (default 6)", (value) => Number(value), 6)
+  .option("--final-limit <n>", "Max aggregated result blocks (default 10)", (value) => Number(value), 10)
+  .option("--max-chars <n>", "Max context characters to return (default 16000)", (value) => Number(value), 16000)
+  .option("--path <substr>", "Filter results to files whose relative path contains this substring")
+  .description("Run a deeper multi-query retrieval pass for ambiguous or archive-style questions.")
+  .action(
+    async (
+      query: string,
+      options: {
+        rootId?: string[];
+        perQueryLimit: number;
+        finalLimit: number;
+        maxChars: number;
+        path?: string;
+      }
+    ) => {
+      requireGeminiKey();
+      const result = await deepSearchContext(query, {
+        rootIds: options.rootId,
+        pathSubstring: options.path,
+        perQueryLimit: Math.max(1, Math.min(options.perQueryLimit ?? 6, 12)),
+        finalLimit: Math.max(1, Math.min(options.finalLimit ?? 10, 20)),
+        maxChars: Math.max(500, options.maxChars ?? 16000)
+      });
+
+      console.log(JSON.stringify(result, null, 2));
     }
   );
 

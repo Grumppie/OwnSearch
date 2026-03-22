@@ -68,3 +68,10 @@ export const IGNORED_DIRECTORIES = new Set([
   "node_modules",
   "venv"
 ]);
+
+export const DOWNWEIGHTED_PATH_SUBSTRINGS = [
+  "/09_benchmark_queries.txt",
+  "/10_extra_hard_notes_for_chunking.txt",
+  "09_benchmark_queries.txt",
+  "10_extra_hard_notes_for_chunking.txt"
+];

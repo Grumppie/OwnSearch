@@ -14,9 +14,10 @@ Use this skill to bridge the gap between what a user asks and what OwnSearch sho
 1. Classify the user request.
 2. Generate one to four retrieval queries.
 3. Start with `search_context` for the strongest query.
-4. Expand to additional searches only if evidence is weak, duplicate-heavy, or incomplete.
-5. Use `get_chunks` after `search` when the answer needs exact wording, detailed comparison, or citation-grade grounding.
-6. Answer only from retrieved evidence. Say when the retrieved context is insufficient.
+4. Use `deep_search_context` for archive-style, ambiguous, or recall-heavy questions.
+5. Expand to additional searches only if evidence is weak, duplicate-heavy, or incomplete.
+6. Use `get_chunks` after `search` when the answer needs exact wording, detailed comparison, or citation-grade grounding.
+7. Answer only from retrieved evidence. Say when the retrieved context is insufficient.
 
 ## Query Planning
 
@@ -54,6 +55,19 @@ Use `search_context` when:
 - the user wants an answer, summary, explanation, or quick grounding
 - the answer can be supported by a few chunks
 - low latency matters more than exhaustive recall
+
+Use `literal_search` when:
+
+- the user gives an exact title, name, identifier, error string, or quoted phrase
+- you want grep-style lookup before semantic expansion
+- you suspect the right answer is present literally and want to avoid semantic drift
+
+Use `deep_search_context` when:
+
+- the question spans multiple documents or timelines
+- the answer is likely to require recall beyond the top few semantic hits
+- the user asks "what is", "what happened", or "tell me the full story" for an entity or event
+- the first-pass `search_context` result feels too thin
 
 Use `search` when:
 
@@ -123,6 +137,19 @@ For a normal grounded answer:
 3. If results look sufficient, answer from them.
 4. If results look weak or ambiguous, call `search` with another variant.
 5. Fetch exact chunks for the best IDs before making precise claims.
+
+For an exact-string lookup:
+
+1. Start with `literal_search`.
+2. If literal hits are enough, answer from them or fetch exact chunks nearby.
+3. If literal hits are sparse or too narrow, switch to `search_context`.
+
+For an archive-style or lore-style question:
+
+1. Start with `deep_search_context`.
+2. Inspect the query variants and source spread.
+3. If the answer depends on exact chronology or wording, follow with `search`.
+4. Fetch exact chunks from the strongest files before making strong claims.
 
 For a locate-the-source task:
 

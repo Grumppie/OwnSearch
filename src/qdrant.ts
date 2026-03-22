@@ -1,5 +1,6 @@
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { loadConfig } from "./config.js";
+import { DOWNWEIGHTED_PATH_SUBSTRINGS } from "./constants.js";
 import type { ChunkLookupResult, ChunkRecord, SearchFilters } from "./types.js";
 import { rerankAndDeduplicate } from "./rerank.js";
 
@@ -23,6 +24,11 @@ export interface SearchHit {
   relativePath: string;
   chunkIndex: number;
   content: string;
+}
+
+function isDownweightedPath(relativePath: string): boolean {
+  const lowered = relativePath.toLowerCase();
+  return DOWNWEIGHTED_PATH_SUBSTRINGS.some((pattern) => lowered.includes(pattern.toLowerCase()));
 }
 
 export class OwnSearchStore {
@@ -207,7 +213,9 @@ export class OwnSearchStore {
 
     const hits = (results as SearchResult[]).map((result) => ({
       id: String(result.id),
-      score: result.score,
+      score: isDownweightedPath(String(result.payload?.relative_path ?? ""))
+        ? result.score * 0.6
+        : result.score,
       rootId: String(result.payload?.root_id ?? ""),
       rootName: String(result.payload?.root_name ?? ""),
       filePath: String(result.payload?.file_path ?? ""),

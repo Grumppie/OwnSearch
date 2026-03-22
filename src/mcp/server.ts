@@ -5,16 +5,19 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { fileURLToPath } from "node:url";
-import { buildContextBundle } from "../context.js";
 import { deleteRootDefinition, findRoot, loadConfig, loadOwnSearchEnv } from "../config.js";
 import { OwnSearchError } from "../errors.js";
 import { embedQuery } from "../gemini.js";
 import { indexPath } from "../indexer.js";
+import { literalSearch } from "../literal-search.js";
 import { createStore } from "../qdrant.js";
+import { deepSearchContext } from "../retrieval.js";
+import { buildContextBundle } from "../context.js";
 
 loadOwnSearchEnv();
 
 const BUNDLED_SKILL_NAME = "ownsearch-rag-search";
+const SERVER_VERSION = "0.1.4";
 
 function asText(result: unknown) {
   return {
@@ -116,7 +119,7 @@ function asError(error: unknown) {
 const server = new Server(
   {
     name: "ownsearch",
-    version: "0.1.0"
+    version: SERVER_VERSION
   },
   {
     capabilities: {
@@ -171,6 +174,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       }
     },
     {
+      name: "literal_search",
+      description: "Exact text search backed by ripgrep. Prefer this for strong keywords, exact names, IDs, error strings, titles, or other literal queries where grep-style matching is better than semantic retrieval.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Exact text to search for." },
+          rootIds: {
+            type: "array",
+            items: { type: "string" },
+            description: "Optional list of root IDs to restrict search."
+          },
+          pathSubstring: { type: "string", description: "Optional file path substring filter." },
+          limit: { type: "number", description: "Maximum result count. Default 20." }
+        },
+        required: ["query"]
+      }
+    },
+    {
       name: "search_context",
       description: "Search and return a grounded context bundle for answer synthesis. Prefer this for question answering. If results are empty, check root scope, indexing completion, and environment connectivity.",
       inputSchema: {
@@ -185,6 +206,26 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           limit: { type: "number", description: "Maximum search hits to consider. Default 8." },
           maxChars: { type: "number", description: "Maximum total characters of bundled context. Default 12000." },
           pathSubstring: { type: "string", description: "Optional file path substring filter." }
+        },
+        required: ["query"]
+      }
+    },
+    {
+      name: "deep_search_context",
+      description: "Run a deeper multi-query retrieval pass for archive-style, ambiguous, or recall-heavy questions. This expands the query, searches multiple variants, diversifies sources, and returns a richer grounded bundle.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Natural language question or concept to investigate." },
+          rootIds: {
+            type: "array",
+            items: { type: "string" },
+            description: "Optional list of root IDs to restrict search."
+          },
+          pathSubstring: { type: "string", description: "Optional file path substring filter." },
+          perQueryLimit: { type: "number", description: "Max hits per query variant. Default 6." },
+          finalLimit: { type: "number", description: "Max final aggregated hits. Default 10." },
+          maxChars: { type: "number", description: "Max total characters in the returned context bundle. Default 16000." }
         },
         required: ["query"]
       }
@@ -314,9 +355,52 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             hits
           },
           [
+            "Use `literal_search` instead when the user gives strong exact strings, IDs, names, or titles.",
             "If you have not read the OwnSearch retrieval guidance yet, call `get_retrieval_skill` first.",
             "Use `search_context` if you want a compact grounded bundle for answering.",
             "Use `get_chunks` on selected hit IDs when exact wording matters."
+          ]
+        );
+      }
+
+      case "literal_search": {
+        const args = request.params.arguments as
+          | { query?: string; rootIds?: string[]; pathSubstring?: string; limit?: number }
+          | undefined;
+        if (!args?.query) {
+          throw new OwnSearchError("`query` is required.");
+        }
+
+        const matches = await literalSearch({
+          query: args.query,
+          rootIds: args.rootIds,
+          pathSubstring: args.pathSubstring,
+          limit: args.limit
+        });
+
+        if (matches.length === 0) {
+          return withGuidance(
+            "Literal search completed but returned no exact matches.",
+            {
+              query: args.query,
+              matches
+            },
+            [
+              "If the user request is more conceptual or paraphrased, switch to `search_context` or `deep_search_context`.",
+              "If you expected a scoped result, call `list_roots` and verify the correct root ID."
+            ]
+          );
+        }
+
+        return withGuidance(
+          `Literal search returned ${matches.length} exact match(es).`,
+          {
+            query: args.query,
+            matches
+          },
+          [
+            "Use these results when exact wording, names, IDs, or titles matter.",
+            "Switch to `search_context` or `deep_search_context` if you need semantic expansion or multi-document synthesis."
           ]
         );
       }
@@ -362,9 +446,56 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           `Context bundle built from ${bundle.results.length} result block(s).`,
           bundle,
           [
+            "Use `literal_search` first when the query contains a strong exact string or title.",
             "If retrieval planning is weak or ambiguous, call `get_retrieval_skill` for query-rewrite guidance.",
             "Answer using only the returned context when possible.",
             "If you need exact source text, call `get_chunks` with the contributing chunk IDs from `search`."
+          ]
+        );
+      }
+
+      case "deep_search_context": {
+        const args = request.params.arguments as
+          | {
+            query?: string;
+            rootIds?: string[];
+            pathSubstring?: string;
+            perQueryLimit?: number;
+            finalLimit?: number;
+            maxChars?: number;
+          }
+          | undefined;
+        if (!args?.query) {
+          throw new OwnSearchError("`query` is required.");
+        }
+
+        const result = await deepSearchContext(args.query, {
+          rootIds: args.rootIds,
+          pathSubstring: args.pathSubstring,
+          perQueryLimit: args.perQueryLimit,
+          finalLimit: args.finalLimit,
+          maxChars: args.maxChars
+        });
+
+        if (result.bundle.results.length === 0) {
+          return withGuidance(
+            "Deep retrieval completed but still found no grounded evidence.",
+            result,
+            [
+              "Call `list_roots` to confirm the root scope.",
+              "Retry with a shorter or more literal query.",
+              "If the corpus was indexed recently, call `index_path` again to ensure indexing completed."
+            ]
+          );
+        }
+
+        return withGuidance(
+          `Deep retrieval built a richer bundle from ${result.distinctFiles} distinct file(s) across ${result.queryVariants.length} query variant(s).`,
+          result,
+          [
+            "Use `literal_search` instead when the user gives a precise title, error string, or identifier.",
+            "Use this result for archive-style or multi-document synthesis.",
+            "If you need exact wording, follow up with `search` and `get_chunks` on the strongest source files."
           ]
         );
       }

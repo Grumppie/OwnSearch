@@ -218,8 +218,12 @@ The skill is intended to help an agent:
   Lists approved indexed roots.
 - `ownsearch search "<query>"`
   Returns reranked search hits from the vector store.
+- `ownsearch literal-search "<query>"`
+  Runs exact text search with `ripgrep` over indexed roots.
 - `ownsearch search-context "<query>"`
   Returns a compact grounded context bundle for agents.
+- `ownsearch deep-search-context "<query>"`
+  Runs a deeper multi-query retrieval pass for ambiguous or archive-style questions.
 - `ownsearch delete-root <rootId>`
   Removes a root from config and deletes its vectors from Qdrant.
 - `ownsearch store-status`
@@ -235,9 +239,12 @@ The skill is intended to help an agent:
 
 The MCP server currently exposes:
 
+- `get_retrieval_skill`
 - `index_path`
 - `search`
+- `literal_search`
 - `search_context`
+- `deep_search_context`
 - `get_chunks`
 - `list_roots`
 - `delete_root`
@@ -245,9 +252,11 @@ The MCP server currently exposes:
 
 Recommended retrieval flow:
 
-1. Use `search_context` for fast grounded retrieval.
-2. Use `search` when ranking and source inspection matter.
-3. Use `get_chunks` when exact wording or detailed comparison matters.
+1. Use `literal_search` when the user gives an exact title, name, identifier, or quoted phrase.
+2. Use `search_context` for fast grounded retrieval.
+3. Use `deep_search_context` for ambiguous, archive-style, or multi-document questions.
+4. Use `search` when ranking and source inspection matter.
+5. Use `get_chunks` when exact wording or detailed comparison matters.
 
 ## Validation
 
@@ -284,6 +293,7 @@ Operational limitations:
 - extracted document quality depends on source document quality
 - duplicate-heavy corpora are improved by current reranking, but not fully solved for all edge cases
 - scanned or low-quality PDFs may require OCR before indexing
+- `literal_search` depends on `ripgrep` being available on the local machine
 
 ## Future scope
 

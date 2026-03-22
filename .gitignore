@@ -5,3 +5,6 @@ dist
 *.tgz
 /smoke-*
 _testing
+eval-*.json
+*.generated.json
+search_results.json
