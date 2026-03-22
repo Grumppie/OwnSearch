@@ -1,36 +1,114 @@
 # ownsearch
 
-**ownsearch** is a local search layer for agents.
+**ownsearch** is a local retrieval layer for agents.
 
-It indexes approved folders into a local Qdrant vector store, exposes retrieval through an MCP server, and gives agents grounded access to private knowledge without requiring a hosted search service.
+It indexes approved folders into a local Qdrant vector store, embeds content with Gemini, and exposes grounded retrieval through an MCP server so agents can search private documents without shipping those documents to a hosted RAG backend.
 
-V1 is intentionally text-first: reliable local retrieval for documentation, code, and common text document formats. Future versions are intended to expand into multimodal indexing and search for images, audio, video, and richer document workflows.
+This package is designed for **text-first, local, agentic RAG**:
+
+- local folders instead of SaaS document ingestion
+- MCP-native access for agents
+- grounded chunk retrieval instead of opaque long-context guessing
+- predictable local storage with Docker-backed Qdrant
+
+## Why it exists
+
+Most agents waste time and tokens when they do one of two things:
+
+- search too broadly with weak semantic queries
+- skip retrieval and guess from partial context
+
+`ownsearch` is meant to reduce both failure modes by:
+
+- indexing local knowledge once
+- making retrieval cheap and reusable
+- giving agents a structured way to fetch only the chunks they need
+- improving answer quality with reranking, deduplication, and grounded chunk access
+
+## Core use cases
+
+`ownsearch` is a good fit when an agent needs to work over:
+
+- product documentation
+- technical design docs
+- code-adjacent text files
+- contracts and policy documents
+- research notes
+- knowledge bases stored in folders
+- PDF, DOCX, RTF, markdown, and plain-text heavy repositories
+
+Typical agent workflows:
+
+- answer questions over local docs
+- locate the exact source file or section for a fact
+- summarize a set of related files
+- compare policy, spec, or contract language across documents
+- support coding agents with repo-local documentation search
+- reduce token cost by retrieving only relevant chunks instead of loading entire files
 
 ## What it does
 
-- Indexes local folders into a persistent vector store
-- Chunks and embeds supported files with Gemini
-- Supports incremental reindexing for changed and deleted files
-- Exposes search and context retrieval through MCP
-- Lets agents retrieve ranked hits, exact chunks, or bundled grounded context
+- indexes local folders into a persistent vector store
+- chunks and embeds supported files with Gemini
+- supports incremental reindexing for changed and deleted files
+- exposes search and context retrieval through MCP
+- reranks and deduplicates result sets before returning them
+- lets agents retrieve ranked hits, exact chunks, or bundled grounded context
 
-## V1 scope
+## Current power
 
-- text and code files
-- extracted text from PDFs, DOCX, and RTF
-- Gemini `gemini-embedding-001`
-- Docker-backed Qdrant
-- stdio MCP server for local agent attachment
+What is already strong in the current package:
 
-## Quickstart
+- local-first setup with Docker-backed Qdrant
+- deterministic readiness checks through `ownsearch doctor`
+- multi-platform MCP config generation
+- bundled retrieval skill for better query planning
+- support for common text document formats
+- large plain text and code files are no longer blocked by the extracted-document size cap
+- repeatable smoke validation for mixed text corpora
 
-Install `ownsearch` globally:
+## V1 supported document types
+
+The current package is intended for text-first corpora, including:
+
+- plain text and code files
+- markdown and MDX
+- JSON, YAML, TOML, CSV, XML, HTML
+- PDF via text extraction
+- DOCX via text extraction
+- RTF via text extraction
+
+## Deployment readiness
+
+This package is ready to deploy for **text-first local document folders** when:
+
+- Node.js `20+` is available
+- Docker is available and Qdrant can run locally
+- `GEMINI_API_KEY` is configured
+- the document corpus is primarily text-based
+
+Installation:
 
 ```bash
 npm install -g ownsearch
 ```
 
-Set it up, index a folder, and start searching:
+Deployment checklist:
+
+```bash
+npm install -g ownsearch
+ownsearch setup
+ownsearch doctor
+ownsearch index C:\path\to\folder --name my-folder
+ownsearch serve-mcp
+```
+
+If `ownsearch doctor` returns:
+
+- `verdict.status: "ready"` then the package is operational
+- `verdict.status: "action_required"` then follow the listed `nextSteps`
+
+## Quickstart
 
 ```bash
 ownsearch setup
@@ -42,56 +120,44 @@ ownsearch search-context "what is this repo about?" --limit 8 --max-chars 12000
 ownsearch serve-mcp
 ```
 
-On first run, `ownsearch setup` can prompt for `GEMINI_API_KEY`, link users to Google AI Studio, save the key to `~/.ownsearch/.env`, and optionally print the exact MCP config for a supported agent.
+On first run, `ownsearch setup` can:
 
-To connect `ownsearch` to a supported agent, print a config snippet for your client:
+- prompt for `GEMINI_API_KEY`
+- link users to Google AI Studio
+- save the key to `~/.ownsearch/.env`
+- print exact next commands for CLI and MCP usage
+- optionally print an MCP config snippet for a selected agent
+
+## Real-world fit
+
+`ownsearch` is a strong fit for:
+
+- engineering teams with private docs that should stay local
+- coding agents that need repo-adjacent design docs and runbooks
+- consultants or operators working across contract, policy, or knowledge folders
+- researchers who want grounded retrieval over local notes and exported reports
+- teams trying to reduce agent token burn by retrieving small grounded context bundles instead of pasting entire files
+
+It is less suitable when:
+
+- the corpus is mostly scanned documents that need OCR
+- the workflow depends on spreadsheets, slides, or legacy Office formats
+- the main requirement is hosted multi-user search rather than local agent retrieval
+
+## Agent integration
+
+To print MCP config snippets:
 
 ```bash
 ownsearch print-agent-config codex
-ownsearch print-agent-config claude-desktop
 ownsearch print-agent-config cursor
 ownsearch print-agent-config vscode
 ownsearch print-agent-config github-copilot
 ownsearch print-agent-config copilot-cli
 ownsearch print-agent-config windsurf
 ownsearch print-agent-config continue
+ownsearch print-agent-config claude-desktop
 ```
-
-## Local development
-
-If you want to run `ownsearch` from source while developing locally:
-
-```bash
-npm install
-npm run build
-node dist/cli.js setup
-node dist/cli.js index ./docs --name docs
-node dist/cli.js search "what is this repo about?" --limit 5
-node dist/cli.js serve-mcp
-```
-
-## CLI commands
-
-- `ownsearch setup`
-  Starts or reconnects to the local Qdrant Docker container, creates local config, persists `GEMINI_API_KEY` into `~/.ownsearch/.env`, prints the next exact commands for CLI and MCP usage, and can print the MCP config for a selected agent.
-- `ownsearch doctor`
-  Checks config, Gemini key presence, Qdrant connectivity, active collection settings, and emits a deterministic readiness verdict with next steps.
-- `ownsearch index <folder> --name <name>`
-  Indexes a folder incrementally into the local vector collection.
-- `ownsearch list-roots`
-  Lists approved indexed roots.
-- `ownsearch search "<query>"`
-  Returns ranked search hits from the vector store.
-- `ownsearch search-context "<query>"`
-  Returns a compact grounded context bundle for agents.
-- `ownsearch delete-root <rootId>`
-  Removes a root from config and deletes its vectors from Qdrant.
-- `ownsearch store-status`
-  Shows collection status and vector configuration.
-- `ownsearch serve-mcp`
-  Starts the stdio MCP server.
-- `ownsearch print-agent-config <agent>`
-  Prints an MCP config snippet or installation guidance for supported agents and platforms.
 
 Supported config targets currently include:
 
@@ -103,6 +169,52 @@ Supported config targets currently include:
 - `windsurf`
 - `continue`
 - `claude-desktop`
+
+Notes:
+
+- `claude-desktop` currently returns guidance rather than a raw JSON snippet because current Claude Desktop docs prefer desktop extensions (`.mcpb`) over manual JSON server configs
+- all other supported targets return concrete MCP config payloads
+
+## Bundled skill
+
+The package ships with a bundled retrieval skill:
+
+```bash
+ownsearch print-skill ownsearch-rag-search
+```
+
+The skill is intended to help an agent:
+
+- rewrite weak user requests into stronger retrieval queries
+- decide when to use `search_context` vs `search` vs `get_chunks`
+- recover from poor first-pass retrieval
+- avoid duplicate-heavy answer synthesis
+- stay grounded when retrieval is probabilistic
+
+## CLI commands
+
+- `ownsearch setup`
+  Starts or reconnects to the local Qdrant Docker container, creates local config, persists `GEMINI_API_KEY`, and prints next-step commands.
+- `ownsearch doctor`
+  Checks config, Gemini key presence, Qdrant connectivity, collection settings, and emits a deterministic readiness verdict.
+- `ownsearch index <folder> --name <name>`
+  Indexes a folder incrementally into the local vector collection.
+- `ownsearch list-roots`
+  Lists approved indexed roots.
+- `ownsearch search "<query>"`
+  Returns reranked search hits from the vector store.
+- `ownsearch search-context "<query>"`
+  Returns a compact grounded context bundle for agents.
+- `ownsearch delete-root <rootId>`
+  Removes a root from config and deletes its vectors from Qdrant.
+- `ownsearch store-status`
+  Shows collection status and vector configuration.
+- `ownsearch serve-mcp`
+  Starts the stdio MCP server.
+- `ownsearch print-agent-config <agent>`
+  Prints MCP config snippets or platform guidance.
+- `ownsearch print-skill [skill]`
+  Prints a bundled OwnSearch skill.
 
 ## MCP tools
 
@@ -116,36 +228,73 @@ The MCP server currently exposes:
 - `delete_root`
 - `store_status`
 
-Recommended agent flow:
+Recommended retrieval flow:
 
-1. Call `search_context` for fast grounded retrieval.
-2. If more precision is needed, call `search`.
-3. Use `get_chunks` on selected hit IDs for exact source text.
+1. Use `search_context` for fast grounded retrieval.
+2. Use `search` when ranking and source inspection matter.
+3. Use `get_chunks` when exact wording or detailed comparison matters.
 
-## Notes
+## Validation
 
-- Config is stored in `~/.ownsearch/config.json`
-- Shared CLI and MCP secrets can be stored in `~/.ownsearch/.env`
-- Qdrant runs locally in Docker as `ownsearch-qdrant`
-- `GEMINI_API_KEY` may come from the shell environment, the current working directory `.env`, or `~/.ownsearch/.env`
-- Large plain text and code files are not rejected by the extracted-document byte cap; the `maxFileBytes` limit primarily applies to formats that require extraction such as PDF, DOCX, and RTF.
-- Node.js `20+` is required
+The package includes a repeatable smoke suite:
 
-## Roadmap
+```bash
+npm run smoke:text-docs
+```
 
-Planned after the text-first v1:
+That smoke run currently validates:
 
+- `.txt` retrieval
+- `.rtf` retrieval
+- `.docx` retrieval
+- `.pdf` retrieval
+- large plain text file bypass of the extracted-document byte cap
+
+## Limitations
+
+This package is deploy-ready for text-first corpora, but it is not universal document intelligence.
+
+Current hard limitations:
+
+- no OCR for image-only PDFs
+- no `.doc` support
+- no spreadsheet or presentation extraction such as `.xlsx` or `.pptx`
+- no multimodal embeddings yet
+- reranking is heuristic and local, not yet model-based
+- very large corpora can still become expensive because embedding cost scales with chunk count
+
+Operational limitations:
+
+- retrieval quality still depends on query quality
+- extracted document quality depends on source document quality
+- duplicate-heavy corpora are improved by current reranking, but not fully solved for all edge cases
+- scanned or low-quality PDFs may require OCR before indexing
+
+## Future scope
+
+Planned next-stage improvements:
+
+- pluggable learned rerankers
+- stronger deduplication across overlapping corpora
 - richer document extraction
-- better reranking and deduplication
-- watch mode for automatic reindexing
+- watch mode for automatic local reindexing
 - HTTP MCP transport
-- multimodal indexing and search for:
+- optional hosted deployment mode
+- multimodal indexing and retrieval for:
   - images
   - audio
   - video
   - richer document formats
 
 The multimodal phase will require careful collection migration because Gemini text and multimodal embedding spaces are not interchangeable across model families.
+
+## Notes
+
+- config is stored in `~/.ownsearch/config.json`
+- shared CLI and MCP secrets can be stored in `~/.ownsearch/.env`
+- Qdrant runs locally in Docker as `ownsearch-qdrant`
+- `GEMINI_API_KEY` may come from the shell environment, the current working directory `.env`, or `~/.ownsearch/.env`
+- `maxFileBytes` primarily applies to extracted document formats such as PDF, DOCX, and RTF, not to large plain text and code files
 
 ## License
 
