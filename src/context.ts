@@ -10,6 +10,23 @@ export function buildContextBundle(
   let totalChars = 0;
 
   for (const hit of hits) {
+    const last = results.at(-1);
+    if (
+      last &&
+      last.rootId === hit.rootId &&
+      last.relativePath === hit.relativePath &&
+      hit.chunkIndex === last.chunkIndex + 1
+    ) {
+      const mergedContent = `${last.content}\n${hit.content}`.trim();
+      const mergedDelta = mergedContent.length - last.content.length;
+      if (totalChars + mergedDelta <= maxChars) {
+        last.content = mergedContent;
+        last.chunkIndex = hit.chunkIndex;
+        totalChars += mergedDelta;
+        continue;
+      }
+    }
+
     if (results.length > 0 && totalChars + hit.content.length > maxChars) {
       break;
     }

@@ -169,6 +169,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const hits = await store.search(
           vector,
           {
+            queryText: args.query,
             rootIds: args.rootIds,
             pathSubstring: args.pathSubstring
           },
@@ -194,6 +195,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const hits = await store.search(
           vector,
           {
+            queryText: args.query,
             rootIds: args.rootIds,
             pathSubstring: args.pathSubstring
           },

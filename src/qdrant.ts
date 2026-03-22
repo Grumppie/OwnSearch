@@ -1,6 +1,7 @@
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { loadConfig } from "./config.js";
 import type { ChunkLookupResult, ChunkRecord, SearchFilters } from "./types.js";
+import { rerankAndDeduplicate } from "./rerank.js";
 
 interface SearchResult {
   id: string | number;
@@ -199,7 +200,7 @@ export class OwnSearchStore {
 
     const results = await this.client.search(this.collectionName, {
       vector,
-      limit: filters.pathSubstring ? Math.max(limit * 3, limit) : limit,
+      limit: Math.max(filters.pathSubstring ? limit * 8 : limit * 6, 24),
       with_payload: true,
       filter: must.length ? { must } : undefined
     });
@@ -215,12 +216,11 @@ export class OwnSearchStore {
       content: String(result.payload?.content ?? "")
     }));
 
-    if (!filters.pathSubstring) {
-      return hits.slice(0, limit);
-    }
+    const filtered = !filters.pathSubstring
+      ? hits
+      : hits.filter((hit) => hit.relativePath.toLowerCase().includes(filters.pathSubstring!.toLowerCase()));
 
-    const needle = filters.pathSubstring.toLowerCase();
-    return hits.filter((hit) => hit.relativePath.toLowerCase().includes(needle)).slice(0, limit);
+    return rerankAndDeduplicate(filters.queryText ?? "", filtered, limit);
   }
 
   async getChunks(ids: string[]): Promise<ChunkLookupResult[]> {

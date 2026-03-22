@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import readline from "node:readline/promises";
@@ -28,6 +29,7 @@ loadOwnSearchEnv();
 const program = new Command();
 const PACKAGE_NAME = "ownsearch";
 const GEMINI_API_KEY_URL = "https://aistudio.google.com/apikey";
+const BUNDLED_SKILL_NAME = "ownsearch-rag-search";
 const SUPPORTED_AGENTS = [
   "codex",
   "claude-desktop",
@@ -128,6 +130,13 @@ function buildAgentConfig(agent: SupportedAgent): Record<string, unknown> {
     default:
       throw new OwnSearchError(`Unsupported agent: ${agent}`);
   }
+}
+
+async function readBundledSkill(skillName: string): Promise<string> {
+  const currentFilePath = fileURLToPath(import.meta.url);
+  const packageRoot = path.resolve(path.dirname(currentFilePath), "..");
+  const skillPath = path.join(packageRoot, "skills", skillName, "SKILL.md");
+  return fs.readFile(skillPath, "utf8");
 }
 
 function getDoctorVerdict(input: { geminiApiKeyPresent: boolean; qdrantReachable: boolean; rootCount: number }): DoctorVerdict {
@@ -249,6 +258,8 @@ function printSetupNextSteps(): void {
   console.log("    ownsearch print-agent-config copilot-cli");
   console.log("    ownsearch print-agent-config windsurf");
   console.log("    ownsearch print-agent-config continue");
+  console.log("  Bundled retrieval skill:");
+  console.log(`    ownsearch print-skill ${BUNDLED_SKILL_NAME}`);
 }
 
 async function promptForAgentChoice(): Promise<SupportedAgent | undefined> {
@@ -386,6 +397,7 @@ program
       const hits = await store.search(
         vector,
         {
+          queryText: query,
           rootIds: options.rootId,
           pathSubstring: options.path
         },
@@ -415,6 +427,7 @@ program
       const hits = await store.search(
         vector,
         {
+          queryText: query,
           rootIds: options.rootId,
           pathSubstring: options.path
         },
@@ -524,6 +537,15 @@ program
     }
 
     throw new OwnSearchError(`Unsupported agent: ${agent}`);
+  });
+
+program
+  .command("print-skill")
+  .argument("[skill]", `Bundled skill name (default ${BUNDLED_SKILL_NAME})`)
+  .description("Print a bundled OwnSearch skill that helps agents query retrieval tools more effectively.")
+  .action(async (skill: string | undefined) => {
+    const skillName = skill?.trim() || BUNDLED_SKILL_NAME;
+    console.log(await readBundledSkill(skillName));
   });
 
 program.parseAsync(process.argv).catch((error) => {

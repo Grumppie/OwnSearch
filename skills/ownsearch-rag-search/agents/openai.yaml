@@ -1,0 +1,4 @@
+interface:
+  display_name: "OwnSearch RAG Search"
+  short_description: "Sharpen OwnSearch retrieval"
+  default_prompt: "Use $ownsearch-rag-search to turn my request into stronger OwnSearch retrieval and grounded answering."

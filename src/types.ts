@@ -36,6 +36,7 @@ export interface ChunkRecord {
 }
 
 export interface SearchFilters {
+  queryText?: string;
   rootIds?: string[];
   pathSubstring?: string;
 }
