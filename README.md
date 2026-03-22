@@ -289,20 +289,143 @@ The repo also includes comparative retrieval evals:
 
 - `scripts/eval-grep-vs-ownsearch.mts`
 - `scripts/eval-adversarial-retrieval.mts`
+- `scripts/eval-agent-tooling-efficiency.mts`
+- `scripts/eval-dnd-agent-efficiency.mts`
 
 These evals are meant to expose where:
 
 - plain `grep` is still best
 - shallow semantic retrieval is too weak
 - deeper retrieval improves agent-facing RAG quality
+- the retrieval layer improves agent efficiency compared with normal CLI-style tool usage
 
-On the current Mireglass benchmark corpus, the latest comparative run produced:
+Run them with:
 
-- `deep`: `69.2` average score
-- `grep`: `65.67` average score
-- `shallow`: `65.09` average score
+```bash
+npm run eval:agent-efficiency
+npm run eval:dnd-agent-efficiency
+```
+
+### Benchmark sources
+
+These benchmark results are from local corpora checked in under:
+
+- `_testing/mireglass_test`
+  - a small synthetic archive corpus used to probe ambiguity, aliasing, contradiction handling, and source diversification
+- `_testing/dnd_test`
+  - a larger PDF-heavy rules corpus containing:
+  - `phb.pdf`
+  - `PlayerDnDBasicRules_v0.2.pdf`
+  - `D&D 5e - DM's Basic Rules v 0.3.pdf`
+  - `Dungeon Master's Guide.pdf`
+
+The eval scripts are designed to be reproducible from the repo, not hand-scored screenshots or one-off demos.
+
+### Mireglass retrieval benchmark
+
+Command:
+
+```bash
+npm run eval:agent-efficiency
+```
+
+This benchmark compares:
+
+- a CLI-agent style baseline that uses lexical search plus targeted file reads
+- `search_context`
+- `deep_search_context`
+
+Latest Mireglass result:
+
+| Method | Avg quality | Avg efficiency | Avg latency | Avg chars | Avg commands | Quality wins | Efficiency wins |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `cli_baseline` | `0.352` | `0.117` | `32.8 ms` | `2466.5` | `4.00` | `0/8` | `0/8` |
+| `search_context` | `0.687` | `0.493` | `564.0 ms` | `8811.5` | `1.00` | `3/8` | `6/8` |
+| `deep_search_context` | `0.722` | `0.436` | `1633.4 ms` | `9019.8` | `1.00` | `5/8` | `2/8` |
+
+Quality bar chart:
+
+```text
+cli_baseline        0.352  #######
+search_context      0.687  ##############
+deep_search_context 0.722  ##############
+```
+
+Efficiency bar chart:
+
+```text
+cli_baseline        0.117  ##
+search_context      0.493  ##########
+deep_search_context 0.436  #########
+```
+
+Takeaway:
+
+- `deep_search_context` was best on archive-style answer quality
+- `search_context` was usually the best default on efficiency
+- the CLI baseline needed more tool steps and still produced weaker evidence bundles
 
 The adversarial eval also showed that the current deep path reduced known noise-file leakage the most in this corpus.
+
+### D&D corpus benchmark
+
+Command:
+
+```bash
+npm run eval:dnd-agent-efficiency
+```
+
+This benchmark compares:
+
+- `cli_extract_cold`
+  - a realistic CLI-agent baseline that extracts PDF text fresh for each question, then does lexical ranking and excerpt selection
+- `cli_extract_warm`
+  - the same baseline with the extracted corpus already in memory
+- `search_context`
+- `deep_search_context`
+
+Latest D&D result:
+
+| Method | Avg quality | Avg efficiency | Avg latency | Avg chars | Avg commands | Quality wins | Efficiency wins |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `cli_extract_cold` | `0.605` | `0.129` | `4850.7 ms` | `3692.8` | `4.00` | `0/6` | `0/6` |
+| `cli_extract_warm` | `0.605` | `0.318` | `25.5 ms` | `3692.8` | `4.00` | `0/6` | `0/6` |
+| `search_context` | `0.864` | `0.717` | `665.2 ms` | `9577.3` | `1.00` | `5/6` | `5/6` |
+| `deep_search_context` | `0.880` | `0.716` | `1615.3 ms` | `7978.3` | `1.00` | `1/6` | `1/6` |
+
+Quality bar chart:
+
+```text
+cli_extract_cold    0.605  ############
+cli_extract_warm    0.605  ############
+search_context      0.864  #################
+deep_search_context 0.880  ##################
+```
+
+Efficiency bar chart:
+
+```text
+cli_extract_cold    0.129  ###
+cli_extract_warm    0.318  ######
+search_context      0.717  ##############
+deep_search_context 0.716  ##############
+```
+
+Takeaway:
+
+- on a larger PDF-heavy rules corpus, `search_context` was the best default for agent efficiency
+- `deep_search_context` was slightly stronger on raw quality but usually not enough to justify the extra latency on straightforward rules questions
+- even a warmed CLI extraction baseline was materially worse for grounded retrieval quality than the indexed search layer
+
+### Trust notes
+
+These numbers are useful, but they are not universal truths.
+
+- The benchmark corpora are local and finite.
+- The scoring functions are explicit in the scripts and can be inspected or changed.
+- The D&D benchmark favors grounded rules retrieval, not open-ended generation quality.
+- The Mireglass benchmark favors multi-document archive reasoning and contradiction handling.
+- For a new corpus, you should treat these as reference evals and add your own benchmark set before making strong deployment claims.
 
 ## Limitations
 

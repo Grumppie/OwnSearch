@@ -25,8 +25,10 @@ loadOwnSearchEnv();
 const program = new Command();
 const PACKAGE_NAME = "ownsearch";
 const GEMINI_API_KEY_URL = "https://aistudio.google.com/apikey";
-const DOCKER_DESKTOP_WINDOWS_URL = "https://docs.docker.com/desktop/setup/install/windows-install/";
 const DOCKER_DESKTOP_OVERVIEW_URL = "https://docs.docker.com/desktop/";
+const DOCKER_DESKTOP_WINDOWS_URL = "https://docs.docker.com/desktop/setup/install/windows-install/";
+const DOCKER_DESKTOP_MAC_URL = "https://docs.docker.com/desktop/setup/install/mac-install/";
+const DOCKER_ENGINE_LINUX_URL = "https://docs.docker.com/engine/install/";
 const BUNDLED_SKILL_NAME = "ownsearch-rag-search";
 const SUPPORTED_AGENTS = [
   "codex",
@@ -81,6 +83,26 @@ function progress(message: string, enabled = SHOULD_SHOW_PROGRESS): void {
   }
 
   process.stderr.write(`${message}\n`);
+}
+
+function getDockerInstallLabel(): string {
+  if (process.platform === "win32") {
+    return "Windows install";
+  }
+  if (process.platform === "darwin") {
+    return "macOS install";
+  }
+  return "Linux install";
+}
+
+function getDockerInstallUrl(): string {
+  if (process.platform === "win32") {
+    return DOCKER_DESKTOP_WINDOWS_URL;
+  }
+  if (process.platform === "darwin") {
+    return DOCKER_DESKTOP_MAC_URL;
+  }
+  return DOCKER_ENGINE_LINUX_URL;
 }
 
 async function loadDockerModule() {
@@ -412,8 +434,8 @@ function printSetupNextSteps(): void {
   console.log(`     ownsearch print-skill ${BUNDLED_SKILL_NAME}`);
   console.log("");
   console.log("Docker requirement");
-  console.log("  OwnSearch requires Docker Desktop so it can run Qdrant locally.");
-  console.log(`  Windows install: ${DOCKER_DESKTOP_WINDOWS_URL}`);
+  console.log("  OwnSearch requires Docker so it can run Qdrant locally.");
+  console.log(`  ${getDockerInstallLabel()}: ${getDockerInstallUrl()}`);
   console.log(`  Docker docs: ${DOCKER_DESKTOP_OVERVIEW_URL}`);
 }
 
@@ -434,8 +456,8 @@ function printAgentSetupNextSteps(): void {
   console.log("    ownsearch install-agent-config codex");
   console.log("");
   console.log("Docker requirement");
-  console.log("  OwnSearch requires Docker Desktop so it can run Qdrant locally.");
-  console.log(`  Windows install: ${DOCKER_DESKTOP_WINDOWS_URL}`);
+  console.log("  OwnSearch requires Docker so it can run Qdrant locally.");
+  console.log(`  ${getDockerInstallLabel()}: ${getDockerInstallUrl()}`);
   console.log(`  Docker docs: ${DOCKER_DESKTOP_OVERVIEW_URL}`);
 }
 
@@ -604,7 +626,8 @@ function printSetupSummary(input: {
 }): void {
   console.log("OwnSearch setup complete");
   console.log("  Docker is required because OwnSearch runs Qdrant locally in Docker.");
-  console.log(`  Docker docs: ${DOCKER_DESKTOP_WINDOWS_URL}`);
+  console.log(`  ${getDockerInstallLabel()}: ${getDockerInstallUrl()}`);
+  console.log(`  Docker docs: ${DOCKER_DESKTOP_OVERVIEW_URL}`);
   console.log(`  Config: ${input.configPath}`);
   console.log(`  API key file: ${input.envPath}`);
   console.log(`  Qdrant: ${input.qdrantUrl} (${input.qdrantStarted ? "started now" : "already running or reachable"})`);
@@ -629,7 +652,8 @@ function printAgentSetupSummary(input: {
 }): void {
   console.log("OwnSearch setup ready for agent use");
   console.log("  Docker is required because OwnSearch runs Qdrant locally in Docker.");
-  console.log(`  Docker docs: ${DOCKER_DESKTOP_WINDOWS_URL}`);
+  console.log(`  ${getDockerInstallLabel()}: ${getDockerInstallUrl()}`);
+  console.log(`  Docker docs: ${DOCKER_DESKTOP_OVERVIEW_URL}`);
   console.log(`  Config path: ${input.configPath}`);
   console.log(`  Managed env path: ${input.envPath}`);
   console.log(`  Qdrant endpoint: ${input.qdrantUrl}`);

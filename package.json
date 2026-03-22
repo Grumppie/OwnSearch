@@ -14,6 +14,8 @@
   "scripts": {
     "build": "tsup src/cli.ts src/mcp/server.ts --format esm --dts --clean --external pdf-parse",
     "dev": "tsx src/cli.ts",
+    "eval:agent-efficiency": "tsx scripts/eval-agent-tooling-efficiency.mts",
+    "eval:dnd-agent-efficiency": "tsx scripts/eval-dnd-agent-efficiency.mts",
     "prepare": "npm run build",
     "prepublishOnly": "npm run typecheck && npm run build",
     "smoke:text-docs": "tsx scripts/smoke-text-docs.mts",
