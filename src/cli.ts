@@ -18,6 +18,7 @@ import {
   saveGeminiApiKey
 } from "./config.js";
 import { OwnSearchError } from "./errors.js";
+import type { InstallableAgent } from "./agent-install.js";
 
 loadOwnSearchEnv();
 
@@ -39,7 +40,16 @@ const SUPPORTED_AGENTS = [
 ] as const;
 type SupportedAgent = (typeof SUPPORTED_AGENTS)[number];
 const SHOULD_SHOW_PROGRESS = process.stderr.isTTY;
-const PACKAGE_VERSION = "0.1.5";
+const PACKAGE_VERSION = "0.1.7";
+const AUTO_INSTALL_AGENTS = new Set<InstallableAgent>([
+  "codex",
+  "continue",
+  "copilot-cli",
+  "cursor",
+  "github-copilot",
+  "vscode",
+  "windsurf"
+]);
 
 interface DoctorVerdict {
   status: "ready" | "action_required";
@@ -99,6 +109,18 @@ async function loadContextModule() {
 
 async function loadRetrievalModule() {
   return import("./retrieval.js");
+}
+
+async function loadAgentInstallModule() {
+  return import("./agent-install.js");
+}
+
+function isAutoInstallAgent(agent: SupportedAgent): agent is InstallableAgent {
+  return AUTO_INSTALL_AGENTS.has(agent as InstallableAgent);
+}
+
+function isInstallableAgentName(agent: string): agent is InstallableAgent {
+  return AUTO_INSTALL_AGENTS.has(agent as InstallableAgent);
 }
 
 function buildAgentConfig(agent: SupportedAgent): AgentConfigPayload {
@@ -230,12 +252,18 @@ async function promptForGeminiKey(): Promise<boolean> {
   });
 
   try {
-    console.log(`OwnSearch needs a Gemini API key for indexing and search.`);
-    console.log("Gemini API usage is governed by Google’s current free-tier limits, quotas, and pricing.");
-    console.log(`Open Google AI Studio here: ${GEMINI_API_KEY_URL}`);
-    console.log(`OwnSearch will save the key to ${getEnvPath()}`);
+    console.log("OwnSearch needs a Gemini API key for indexing and search.");
+    console.log("Gemini API usage is governed by Google's current free-tier limits, quotas, and pricing.");
+    console.log("");
+    console.log("Next step:");
+    console.log("  1. OwnSearch will open Google AI Studio in your browser.");
+    console.log("  2. You create or copy a Gemini API key there.");
+    console.log(`  3. You paste the key here, and OwnSearch saves it to ${getEnvPath()}.`);
+    console.log("");
+    console.log(`AI Studio URL: ${GEMINI_API_KEY_URL}`);
+    await rl.question("Press Enter when you are ready for OwnSearch to open AI Studio: ");
     openGeminiKeyPage();
-    await rl.question("Press Enter after the AI Studio page is open and you are ready to paste the key: ");
+    await rl.question("Press Enter after AI Studio is open and you have copied the key: ");
 
     for (;;) {
       const apiKey = (await rl.question("Paste GEMINI_API_KEY and press Enter (Ctrl+C to cancel): ")).trim();
@@ -380,7 +408,9 @@ function printSetupNextSteps(): void {
   console.log("     ownsearch serve-mcp");
   console.log("  7. Print agent-specific config:");
   console.log("     ownsearch print-agent-config codex");
-  console.log("  8. Print the bundled retrieval skill:");
+  console.log("  8. Let OwnSearch install MCP config for a supported agent:");
+  console.log("     ownsearch install-agent-config codex");
+  console.log("  9. Print the bundled retrieval skill:");
   console.log(`     ownsearch print-skill ${BUNDLED_SKILL_NAME}`);
   console.log("");
   console.log("Docker requirement");
@@ -404,6 +434,8 @@ function printAgentSetupNextSteps(): void {
   console.log("    ownsearch serve-mcp");
   console.log("  Print MCP config for the host agent:");
   console.log("    ownsearch print-agent-config codex");
+  console.log("  Or let OwnSearch install MCP config automatically:");
+  console.log("    ownsearch install-agent-config codex");
   console.log("");
   console.log("Docker requirement");
   console.log("  OwnSearch requires Docker Desktop so it can run Qdrant locally.");
@@ -505,6 +537,63 @@ function printAgentConfigSnippet(agent: SupportedAgent): void {
     console.log(JSON.stringify(payload.config, null, 2));
     console.log("");
     console.log(`OwnSearch will load GEMINI_API_KEY from ${getEnvPath()} if you ran \`ownsearch setup\`.`);
+    if (isAutoInstallAgent(agent)) {
+      console.log(`To let OwnSearch install this automatically, run \`ownsearch install-agent-config ${agent}\`.`);
+    }
+  }
+}
+
+function printAgentInstallSummary(result: {
+  agent: string;
+  method: "file-merge" | "cli";
+  targetPath?: string;
+  command?: string;
+  summary: string;
+}): void {
+  console.log("");
+  console.log(`OwnSearch installed MCP config for ${result.agent}`);
+  console.log(`  Result: ${result.summary}`);
+  if (result.targetPath) {
+    console.log(`  Config path: ${result.targetPath}`);
+  }
+  if (result.command) {
+    console.log(`  Installer command: ${result.command}`);
+  }
+}
+
+async function maybeInstallAgentConfig(agent: SupportedAgent): Promise<void> {
+  if (!isAutoInstallAgent(agent) || !process.stdin.isTTY || !process.stdout.isTTY) {
+    printAgentConfigSnippet(agent);
+    return;
+  }
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  try {
+    console.log("");
+    console.log(`OwnSearch can install the MCP server for ${agent} automatically without removing other MCP servers.`);
+    const answer = (await rl.question("Install it now? [Y/n]: ")).trim().toLowerCase();
+    if (answer === "n" || answer === "no") {
+      printAgentConfigSnippet(agent);
+      return;
+    }
+  } finally {
+    rl.close();
+  }
+
+  try {
+    progress(`OwnSearch setup: installing MCP config for ${agent}...`);
+    const { installAgentConfig } = await loadAgentInstallModule();
+    const result = await installAgentConfig(agent);
+    printAgentInstallSummary(result);
+  } catch (error) {
+    console.log("");
+    console.log(`OwnSearch could not install MCP config for ${agent} automatically.`);
+    console.log(error instanceof Error ? error.message : String(error));
+    printAgentConfigSnippet(agent);
   }
 }
 
@@ -605,7 +694,7 @@ program
       printSetupNextSteps();
       const agent = await promptForAgentChoice();
       if (agent) {
-        printAgentConfigSnippet(agent);
+        await maybeInstallAgentConfig(agent);
       }
     }
   });
@@ -849,6 +938,21 @@ program
     child.on("exit", (code) => {
       process.exitCode = code ?? 0;
     });
+  });
+
+program
+  .command("install-agent-config")
+  .argument("<agent>", [...AUTO_INSTALL_AGENTS].join(" | "))
+  .description("Safely install OwnSearch into a supported agent MCP config without removing other MCP servers.")
+  .action(async (agent: string) => {
+    if (!isInstallableAgentName(agent)) {
+      throw new OwnSearchError(`Automatic MCP installation is not supported for ${agent}.`);
+    }
+
+    progress(`OwnSearch: installing MCP config for ${agent}...`);
+    const { installAgentConfig } = await loadAgentInstallModule();
+    const result = await installAgentConfig(agent);
+    printAgentInstallSummary(result);
   });
 
 program

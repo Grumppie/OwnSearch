@@ -134,11 +134,13 @@ ownsearch serve-mcp
 On first run, `ownsearch setup` can:
 
 - prompt for `GEMINI_API_KEY`
-- open Google AI Studio automatically
+- explain the key-setup flow before opening Google AI Studio
+- open Google AI Studio after the user confirms they are ready
 - save the key to `~/.ownsearch/.env`
 - validate the pasted key before saving it
 - ask whether setup output should be optimized for a human or an agent
 - print exact next commands for CLI and MCP usage
+- offer to install MCP config automatically for supported agents
 - optionally print an MCP config snippet for a selected agent
 
 Gemini API usage is governed by Google’s current free-tier limits, quotas, and pricing.
@@ -198,6 +200,14 @@ Notes:
 
 - `claude-desktop` currently returns guidance rather than a raw JSON snippet because current Claude Desktop docs prefer desktop extensions (`.mcpb`) over manual JSON server configs
 - all other supported targets return concrete MCP config payloads
+- for supported agents, OwnSearch can also install the MCP server automatically without removing existing MCP servers:
+  - `ownsearch install-agent-config codex`
+  - `ownsearch install-agent-config cursor`
+  - `ownsearch install-agent-config vscode`
+  - `ownsearch install-agent-config github-copilot`
+  - `ownsearch install-agent-config windsurf`
+  - `ownsearch install-agent-config continue`
+  - `ownsearch install-agent-config copilot-cli`
 
 ## Bundled skill
 
@@ -241,6 +251,8 @@ The skill is intended to help an agent:
   Starts the stdio MCP server.
 - `ownsearch print-agent-config <agent>`
   Prints MCP config snippets or platform guidance.
+- `ownsearch install-agent-config <agent>`
+  Safely merges OwnSearch into a supported agent MCP config when the platform can be updated automatically.
 - `ownsearch print-skill [skill]`
   Prints a bundled OwnSearch skill.
 

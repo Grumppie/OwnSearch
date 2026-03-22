@@ -1,6 +1,6 @@
 {
   "name": "ownsearch",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Text-first local document search MCP server backed by Gemini embeddings and Qdrant.",
   "type": "module",
   "bin": {
@@ -45,6 +45,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@iarna/toml": "^2.2.5",
     "@google/genai": "^1.46.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@qdrant/js-client-rest": "^1.17.0",
