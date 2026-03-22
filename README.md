@@ -50,6 +50,11 @@ To connect `ownsearch` to a supported agent, print a config snippet for your cli
 ownsearch print-agent-config codex
 ownsearch print-agent-config claude-desktop
 ownsearch print-agent-config cursor
+ownsearch print-agent-config vscode
+ownsearch print-agent-config github-copilot
+ownsearch print-agent-config copilot-cli
+ownsearch print-agent-config windsurf
+ownsearch print-agent-config continue
 ```
 
 ## Local development
@@ -70,7 +75,7 @@ node dist/cli.js serve-mcp
 - `ownsearch setup`
   Starts or reconnects to the local Qdrant Docker container, creates local config, persists `GEMINI_API_KEY` into `~/.ownsearch/.env`, prints the next exact commands for CLI and MCP usage, and can print the MCP config for a selected agent.
 - `ownsearch doctor`
-  Checks config, Gemini key presence, Qdrant connectivity, and active collection settings.
+  Checks config, Gemini key presence, Qdrant connectivity, active collection settings, and emits a deterministic readiness verdict with next steps.
 - `ownsearch index <folder> --name <name>`
   Indexes a folder incrementally into the local vector collection.
 - `ownsearch list-roots`
@@ -86,7 +91,18 @@ node dist/cli.js serve-mcp
 - `ownsearch serve-mcp`
   Starts the stdio MCP server.
 - `ownsearch print-agent-config <agent>`
-  Prints an MCP config snippet for supported agents.
+  Prints an MCP config snippet or installation guidance for supported agents and platforms.
+
+Supported config targets currently include:
+
+- `codex`
+- `cursor`
+- `vscode`
+- `github-copilot`
+- `copilot-cli`
+- `windsurf`
+- `continue`
+- `claude-desktop`
 
 ## MCP tools
 

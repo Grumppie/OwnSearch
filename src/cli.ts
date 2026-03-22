@@ -28,8 +28,23 @@ loadOwnSearchEnv();
 const program = new Command();
 const PACKAGE_NAME = "ownsearch";
 const GEMINI_API_KEY_URL = "https://aistudio.google.com/apikey";
-const SUPPORTED_AGENTS = ["codex", "claude-desktop", "cursor"] as const;
+const SUPPORTED_AGENTS = [
+  "codex",
+  "claude-desktop",
+  "continue",
+  "copilot-cli",
+  "cursor",
+  "github-copilot",
+  "vscode",
+  "windsurf"
+] as const;
 type SupportedAgent = (typeof SUPPORTED_AGENTS)[number];
+
+interface DoctorVerdict {
+  status: "ready" | "action_required";
+  summary: string;
+  nextSteps: string[];
+}
 
 function requireGeminiKey(): void {
   if (!process.env.GEMINI_API_KEY) {
@@ -38,7 +53,7 @@ function requireGeminiKey(): void {
 }
 
 function buildAgentConfig(agent: SupportedAgent): Record<string, unknown> {
-  const config = {
+  const stdioConfig = {
     command: "npx",
     args: ["-y", PACKAGE_NAME, "serve-mcp"],
     env: {
@@ -48,12 +63,104 @@ function buildAgentConfig(agent: SupportedAgent): Record<string, unknown> {
 
   switch (agent) {
     case "codex":
+      return {
+        platform: "codex",
+        configScope: "Add this server entry to your Codex MCP configuration.",
+        config: { ownsearch: stdioConfig }
+      };
     case "claude-desktop":
+      return {
+        platform: "claude-desktop",
+        installMethod: "Desktop Extension (.mcpb)",
+        note: "Current Claude Desktop documentation recommends local MCP installation through Desktop Extensions instead of manual JSON config files.",
+        nextStep: "OwnSearch does not yet ship an .mcpb bundle. Use Cursor, VS Code, Windsurf, Continue, or GitHub Copilot with the snippets below for now."
+      };
+    case "continue":
+      return {
+        platform: "continue",
+        configPath: ".continue/mcpServers/ownsearch.json",
+        note: "Continue can ingest JSON MCP configs directly.",
+        config: { ownsearch: stdioConfig }
+      };
+    case "copilot-cli":
+      return {
+        platform: "copilot-cli",
+        configPath: "~/.copilot/mcp-config.json",
+        config: {
+          mcpServers: {
+            ownsearch: {
+              type: "local",
+              command: stdioConfig.command,
+              args: stdioConfig.args,
+              env: stdioConfig.env,
+              tools: ["*"]
+            }
+          }
+        }
+      };
     case "cursor":
-      return { ownsearch: config };
+      return {
+        platform: "cursor",
+        configPath: "~/.cursor/mcp.json or .cursor/mcp.json",
+        config: { ownsearch: stdioConfig }
+      };
+    case "github-copilot":
+    case "vscode":
+      return {
+        platform: agent,
+        configPath: ".vscode/mcp.json or VS Code user profile mcp.json",
+        config: {
+          servers: {
+            ownsearch: stdioConfig
+          }
+        }
+      };
+    case "windsurf":
+      return {
+        platform: "windsurf",
+        configPath: "~/.codeium/mcp_config.json",
+        config: {
+          mcpServers: {
+            ownsearch: stdioConfig
+          }
+        }
+      };
     default:
       throw new OwnSearchError(`Unsupported agent: ${agent}`);
   }
+}
+
+function getDoctorVerdict(input: { geminiApiKeyPresent: boolean; qdrantReachable: boolean; rootCount: number }): DoctorVerdict {
+  const nextSteps: string[] = [];
+
+  if (!input.geminiApiKeyPresent) {
+    nextSteps.push("Run `ownsearch setup` and save a Gemini API key.");
+  }
+
+  if (!input.qdrantReachable) {
+    nextSteps.push("Run `ownsearch setup` to start or reconnect to the local Qdrant container.");
+  }
+
+  if (input.geminiApiKeyPresent && input.qdrantReachable && input.rootCount === 0) {
+    nextSteps.push("Run `ownsearch index C:\\path\\to\\folder --name my-folder` to add your first indexed root.");
+  }
+
+  if (nextSteps.length === 0) {
+    nextSteps.push("Run `ownsearch index C:\\path\\to\\folder --name my-folder` to add more content, or `ownsearch serve-mcp` to connect an agent.");
+    return {
+      status: "ready",
+      summary: input.rootCount > 0
+        ? "OwnSearch is ready for indexing, search, and MCP agent use."
+        : "OwnSearch is ready. Qdrant and Gemini are configured.",
+      nextSteps
+    };
+  }
+
+  return {
+    status: "action_required",
+    summary: "OwnSearch is not fully ready yet.",
+    nextSteps
+  };
 }
 
 async function promptForGeminiKey(): Promise<boolean> {
@@ -137,6 +244,11 @@ function printSetupNextSteps(): void {
   console.log("    ownsearch print-agent-config codex");
   console.log("    ownsearch print-agent-config claude-desktop");
   console.log("    ownsearch print-agent-config cursor");
+  console.log("    ownsearch print-agent-config vscode");
+  console.log("    ownsearch print-agent-config github-copilot");
+  console.log("    ownsearch print-agent-config copilot-cli");
+  console.log("    ownsearch print-agent-config windsurf");
+  console.log("    ownsearch print-agent-config continue");
 }
 
 async function promptForAgentChoice(): Promise<SupportedAgent | undefined> {
@@ -155,10 +267,14 @@ async function promptForAgentChoice(): Promise<SupportedAgent | undefined> {
     console.log("  1. codex");
     console.log("  2. claude-desktop");
     console.log("  3. cursor");
-    console.log("  4. skip");
+    console.log("  4. vscode");
+    console.log("  5. windsurf");
+    console.log("  6. copilot-cli");
+    console.log("  7. continue");
+    console.log("  8. skip");
 
     for (;;) {
-      const answer = (await rl.question("Select 1-4: ")).trim().toLowerCase();
+      const answer = (await rl.question("Select 1-8: ")).trim().toLowerCase();
 
       switch (answer) {
         case "1":
@@ -172,11 +288,25 @@ async function promptForAgentChoice(): Promise<SupportedAgent | undefined> {
         case "cursor":
           return "cursor";
         case "4":
+        case "vscode":
+        case "github-copilot":
+          return "vscode";
+        case "5":
+        case "windsurf":
+          return "windsurf";
+        case "6":
+        case "copilot-cli":
+        case "copilot":
+          return "copilot-cli";
+        case "7":
+        case "continue":
+          return "continue";
+        case "8":
         case "skip":
         case "":
           return undefined;
         default:
-          console.log("Enter 1, 2, 3, or 4.");
+          console.log("Enter 1, 2, 3, 4, 5, 6, 7, or 8.");
       }
     }
   } finally {
@@ -342,7 +472,14 @@ program
       qdrantReachable = false;
     }
 
+    const verdict = getDoctorVerdict({
+      geminiApiKeyPresent: Boolean(process.env.GEMINI_API_KEY),
+      qdrantReachable,
+      rootCount: roots.length
+    });
+
     console.log(JSON.stringify({
+      verdict,
       configPath: getConfigPath(),
       envPath: getEnvPath(),
       geminiApiKeyPresent: Boolean(process.env.GEMINI_API_KEY),
@@ -377,7 +514,7 @@ program
 
 program
   .command("print-agent-config")
-  .argument("<agent>", "codex | claude-desktop | cursor")
+  .argument("<agent>", SUPPORTED_AGENTS.join(" | "))
   .description("Print an MCP config snippet for a supported agent.")
   .action(async (agent: string) => {
     if (SUPPORTED_AGENTS.includes(agent as SupportedAgent)) {
