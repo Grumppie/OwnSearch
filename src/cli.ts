@@ -5,8 +5,6 @@ import { spawn } from "node:child_process";
 import readline from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
-import { buildContextBundle } from "./context.js";
-import { ensureQdrantDocker } from "./docker.js";
 import {
   deleteRootDefinition,
   getCwdEnvPath,
@@ -20,11 +18,6 @@ import {
   saveGeminiApiKey
 } from "./config.js";
 import { OwnSearchError } from "./errors.js";
-import { embedQuery, validateGeminiApiKey } from "./gemini.js";
-import { indexPath } from "./indexer.js";
-import { literalSearch } from "./literal-search.js";
-import { createStore } from "./qdrant.js";
-import { deepSearchContext } from "./retrieval.js";
 
 loadOwnSearchEnv();
 
@@ -45,6 +38,8 @@ const SUPPORTED_AGENTS = [
   "windsurf"
 ] as const;
 type SupportedAgent = (typeof SUPPORTED_AGENTS)[number];
+const SHOULD_SHOW_PROGRESS = process.stderr.isTTY;
+const PACKAGE_VERSION = "0.1.5";
 
 interface DoctorVerdict {
   status: "ready" | "action_required";
@@ -70,10 +65,46 @@ function requireGeminiKey(): void {
   }
 }
 
+function progress(message: string, enabled = SHOULD_SHOW_PROGRESS): void {
+  if (!enabled) {
+    return;
+  }
+
+  process.stderr.write(`${message}\n`);
+}
+
+async function loadDockerModule() {
+  return import("./docker.js");
+}
+
+async function loadGeminiModule() {
+  return import("./gemini.js");
+}
+
+async function loadIndexerModule() {
+  return import("./indexer.js");
+}
+
+async function loadLiteralSearchModule() {
+  return import("./literal-search.js");
+}
+
+async function loadQdrantModule() {
+  return import("./qdrant.js");
+}
+
+async function loadContextModule() {
+  return import("./context.js");
+}
+
+async function loadRetrievalModule() {
+  return import("./retrieval.js");
+}
+
 function buildAgentConfig(agent: SupportedAgent): AgentConfigPayload {
   const stdioConfig = {
-    command: "npx",
-    args: ["-y", PACKAGE_NAME, "serve-mcp"]
+    command: PACKAGE_NAME,
+    args: ["serve-mcp"]
   };
 
   switch (agent) {
@@ -81,6 +112,7 @@ function buildAgentConfig(agent: SupportedAgent): AgentConfigPayload {
       return {
         platform: "codex",
         configScope: "Add this server entry to your Codex MCP configuration.",
+        note: "Recommended when ownsearch is installed globally. If you prefer not to install globally, replace `command`/`args` with `npx -y ownsearch serve-mcp`.",
         config: { ownsearch: stdioConfig }
       };
     case "claude-desktop":
@@ -116,6 +148,7 @@ function buildAgentConfig(agent: SupportedAgent): AgentConfigPayload {
       return {
         platform: "cursor",
         configPath: "~/.cursor/mcp.json or .cursor/mcp.json",
+        note: "Recommended when ownsearch is installed globally. Use `npx -y ownsearch serve-mcp` only if you do not want a global install.",
         config: { ownsearch: stdioConfig }
       };
     case "github-copilot":
@@ -123,6 +156,7 @@ function buildAgentConfig(agent: SupportedAgent): AgentConfigPayload {
       return {
         platform: agent,
         configPath: ".vscode/mcp.json or VS Code user profile mcp.json",
+        note: "Recommended when ownsearch is installed globally. Use `npx -y ownsearch serve-mcp` only if you do not want a global install.",
         config: {
           servers: {
             ownsearch: stdioConfig
@@ -133,6 +167,7 @@ function buildAgentConfig(agent: SupportedAgent): AgentConfigPayload {
       return {
         platform: "windsurf",
         configPath: "~/.codeium/mcp_config.json",
+        note: "Recommended when ownsearch is installed globally. Use `npx -y ownsearch serve-mcp` only if you do not want a global install.",
         config: {
           mcpServers: {
             ownsearch: stdioConfig
@@ -214,6 +249,7 @@ async function promptForGeminiKey(): Promise<boolean> {
 
       process.stdout.write("Validating key with Gemini...");
       try {
+        const { validateGeminiApiKey } = await loadGeminiModule();
         await validateGeminiApiKey(apiKey);
         process.stdout.write(" ok\n");
       } catch (error) {
@@ -519,7 +555,7 @@ function printAgentSetupSummary(input: {
 program
   .name("ownsearch")
   .description("Gemini-powered local search MCP server backed by Qdrant.")
-  .version("0.1.4");
+  .version(PACKAGE_VERSION);
 
 program
   .command("setup")
@@ -527,8 +563,12 @@ program
   .option("--json", "Print machine-readable JSON output")
   .option("--audience <audience>", "Choose output style: human or agent")
   .action(async (options: { json?: boolean; audience?: string }) => {
+    progress("OwnSearch setup: loading config...", !options.json);
     const config = await loadConfig();
+    progress("OwnSearch setup: checking local Qdrant container...", !options.json);
+    const { ensureQdrantDocker } = await loadDockerModule();
     const result = await ensureQdrantDocker();
+    progress("OwnSearch setup: checking Gemini API key...", !options.json);
     const gemini = await ensureManagedGeminiKey();
     const audience = options.json
       ? "agent"
@@ -578,6 +618,8 @@ program
   .description("Index a local folder into Qdrant using Gemini embeddings.")
   .action(async (folder: string, options: { name?: string; maxFileBytes?: number }) => {
     requireGeminiKey();
+    progress(`OwnSearch index: scanning and embedding ${folder}...`);
+    const { indexPath } = await loadIndexerModule();
     const result = await indexPath(folder, {
       name: options.name,
       maxFileBytes: options.maxFileBytes
@@ -598,8 +640,13 @@ program
       options: { rootId?: string[]; limit: number; path?: string }
     ) => {
       requireGeminiKey();
+      progress("OwnSearch search: connecting to Qdrant...");
+      const { createStore } = await loadQdrantModule();
       const store = await createStore();
+      progress("OwnSearch search: embedding query with Gemini...");
+      const { embedQuery } = await loadGeminiModule();
       const vector = await embedQuery(query);
+      progress("OwnSearch search: retrieving ranked hits...");
       const hits = await store.search(
         vector,
         {
@@ -626,6 +673,8 @@ program
       query: string,
       options: { rootId?: string[]; limit: number; path?: string }
     ) => {
+      progress("OwnSearch literal-search: running ripgrep over indexed roots...");
+      const { literalSearch } = await loadLiteralSearchModule();
       const matches = await literalSearch({
         query,
         rootIds: options.rootId,
@@ -651,8 +700,13 @@ program
       options: { rootId?: string[]; limit: number; maxChars: number; path?: string }
     ) => {
       requireGeminiKey();
+      progress("OwnSearch search-context: connecting to Qdrant...");
+      const { createStore } = await loadQdrantModule();
       const store = await createStore();
+      progress("OwnSearch search-context: embedding query with Gemini...");
+      const { embedQuery } = await loadGeminiModule();
       const vector = await embedQuery(query);
+      progress("OwnSearch search-context: building grounded context bundle...");
       const hits = await store.search(
         vector,
         {
@@ -663,6 +717,7 @@ program
         Math.max(1, Math.min(options.limit ?? 8, 20))
       );
 
+      const { buildContextBundle } = await loadContextModule();
       console.log(JSON.stringify(buildContextBundle(query, hits, Math.max(500, options.maxChars ?? 12000)), null, 2));
     }
   );
@@ -688,6 +743,8 @@ program
       }
     ) => {
       requireGeminiKey();
+      progress("OwnSearch deep-search-context: running multi-query retrieval...");
+      const { deepSearchContext } = await loadRetrievalModule();
       const result = await deepSearchContext(query, {
         rootIds: options.rootId,
         pathSubstring: options.path,
@@ -717,6 +774,7 @@ program
       throw new OwnSearchError(`Unknown root: ${rootId}`);
     }
 
+    const { createStore } = await loadQdrantModule();
     const store = await createStore();
     await store.deleteRoot(root.id);
     await deleteRootDefinition(root.id);
@@ -727,6 +785,7 @@ program
   .command("store-status")
   .description("Show Qdrant collection status for this package.")
   .action(async () => {
+    const { createStore } = await loadQdrantModule();
     const store = await createStore();
     console.log(JSON.stringify(await store.getStatus(), null, 2));
   });
@@ -735,11 +794,15 @@ program
   .command("doctor")
   .description("Check local prerequisites and package configuration.")
   .action(async () => {
+    progress("OwnSearch doctor: loading config...");
     const config = await loadConfig();
+    progress("OwnSearch doctor: checking indexed roots...");
     const roots = await listRoots();
     let qdrantReachable = false;
 
     try {
+      progress("OwnSearch doctor: checking Qdrant connectivity...");
+      const { createStore } = await loadQdrantModule();
       const store = await createStore();
       await store.getStatus();
       qdrantReachable = true;
