@@ -11,26 +11,32 @@ export const DEFAULT_CHUNK_OVERLAP = 200;
 export const DEFAULT_MAX_FILE_BYTES = 50 * 1024 * 1024;
 export const SUPPORTED_TEXT_EXTENSIONS = new Set([
   ".c",
+  ".conf",
   ".cpp",
   ".cs",
   ".css",
   ".csv",
+  ".docx",
   ".env",
   ".go",
   ".h",
   ".hpp",
   ".html",
+  ".ini",
   ".java",
   ".js",
   ".json",
   ".jsx",
+  ".log",
   ".md",
   ".mdx",
   ".mjs",
   ".pdf",
   ".ps1",
+  ".properties",
   ".py",
   ".rb",
+  ".rtf",
   ".rs",
   ".sh",
   ".sql",
@@ -41,6 +47,11 @@ export const SUPPORTED_TEXT_EXTENSIONS = new Set([
   ".xml",
   ".yaml",
   ".yml"
+]);
+export const EXTRACTED_DOCUMENT_EXTENSIONS = new Set([
+  ".pdf",
+  ".docx",
+  ".rtf"
 ]);
 export const IGNORED_DIRECTORIES = new Set([
   ".git",

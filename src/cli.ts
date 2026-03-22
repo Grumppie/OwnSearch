@@ -491,6 +491,7 @@ program
       vectorSize: config.vectorSize,
       chunkSize: config.chunkSize,
       chunkOverlap: config.chunkOverlap,
+      maxExtractedDocumentBytes: config.maxFileBytes,
       maxFileBytes: config.maxFileBytes,
       rootCount: roots.length
     }, null, 2));

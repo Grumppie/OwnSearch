@@ -4,7 +4,7 @@
 
 It indexes approved folders into a local Qdrant vector store, exposes retrieval through an MCP server, and gives agents grounded access to private knowledge without requiring a hosted search service.
 
-V1 is intentionally text-first: reliable local retrieval for documentation, code, and extracted PDF text. Future versions are intended to expand into multimodal indexing and search for images, audio, video, and richer document workflows.
+V1 is intentionally text-first: reliable local retrieval for documentation, code, and common text document formats. Future versions are intended to expand into multimodal indexing and search for images, audio, video, and richer document workflows.
 
 ## What it does
 
@@ -17,7 +17,7 @@ V1 is intentionally text-first: reliable local retrieval for documentation, code
 ## V1 scope
 
 - text and code files
-- extracted text from PDFs
+- extracted text from PDFs, DOCX, and RTF
 - Gemini `gemini-embedding-001`
 - Docker-backed Qdrant
 - stdio MCP server for local agent attachment
@@ -128,6 +128,7 @@ Recommended agent flow:
 - Shared CLI and MCP secrets can be stored in `~/.ownsearch/.env`
 - Qdrant runs locally in Docker as `ownsearch-qdrant`
 - `GEMINI_API_KEY` may come from the shell environment, the current working directory `.env`, or `~/.ownsearch/.env`
+- Large plain text and code files are not rejected by the extracted-document byte cap; the `maxFileBytes` limit primarily applies to formats that require extraction such as PDF, DOCX, and RTF.
 - Node.js `20+` is required
 
 ## Roadmap

@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import mammoth from "mammoth";
 import { PDFParse } from "pdf-parse";
-import { IGNORED_DIRECTORIES, SUPPORTED_TEXT_EXTENSIONS } from "./constants.js";
+import { EXTRACTED_DOCUMENT_EXTENSIONS, IGNORED_DIRECTORIES, SUPPORTED_TEXT_EXTENSIONS } from "./constants.js";
 
 export interface FileCandidate {
   path: string;
@@ -17,6 +18,15 @@ function sanitizeExtractedText(input: string): string {
     .replace(/\u0000/g, "")
     .replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ")
     .replace(/\r\n/g, "\n");
+}
+
+function extractRtfText(input: string): string {
+  return input
+    .replace(/\\par[d]?/g, "\n")
+    .replace(/\\tab/g, "\t")
+    .replace(/\\'[0-9a-fA-F]{2}/g, " ")
+    .replace(/\\[a-zA-Z]+-?\d* ?/g, "")
+    .replace(/[{}]/g, " ");
 }
 
 export async function collectTextFiles(rootPath: string, maxFileBytes: number): Promise<FileCandidate[]> {
@@ -39,6 +49,12 @@ export async function collectTextFiles(rootPath: string, maxFileBytes: number): 
     } finally {
       await parser.destroy();
     }
+  }
+
+  async function parseDocx(filePath: string): Promise<string> {
+    const buffer = await fs.readFile(filePath);
+    const result = await mammoth.extractRawText({ buffer });
+    return result.value ?? "";
   }
 
   async function walk(currentPath: string): Promise<void> {
@@ -67,7 +83,7 @@ export async function collectTextFiles(rootPath: string, maxFileBytes: number): 
       }
 
       const stats = await fs.stat(nextPath);
-      if (stats.size > maxFileBytes) {
+      if (EXTRACTED_DOCUMENT_EXTENSIONS.has(extension) && stats.size > maxFileBytes) {
         debugLog("skip-size", nextPath, stats.size);
         continue;
       }
@@ -76,6 +92,10 @@ export async function collectTextFiles(rootPath: string, maxFileBytes: number): 
       try {
         if (extension === ".pdf") {
           content = await parsePdf(nextPath);
+        } else if (extension === ".docx") {
+          content = await parseDocx(nextPath);
+        } else if (extension === ".rtf") {
+          content = extractRtfText(await fs.readFile(nextPath, "utf8"));
         } else {
           content = await fs.readFile(nextPath, "utf8");
         }

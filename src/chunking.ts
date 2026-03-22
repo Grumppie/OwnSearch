@@ -10,9 +10,17 @@ export function chunkText(content: string, chunkSize: number, chunkOverlap: numb
   while (start < normalized.length) {
     let end = Math.min(start + chunkSize, normalized.length);
     if (end < normalized.length) {
-      const lastBoundary = normalized.lastIndexOf("\n", end);
-      if (lastBoundary > start + Math.floor(chunkSize * 0.5)) {
-        end = lastBoundary;
+      const minimumBoundary = start + Math.floor(chunkSize * 0.5);
+      const newlineBoundary = normalized.lastIndexOf("\n", end);
+      const whitespaceBoundary = normalized.lastIndexOf(" ", end);
+      const punctuationBoundary = Math.max(
+        normalized.lastIndexOf(". ", end),
+        normalized.lastIndexOf("? ", end),
+        normalized.lastIndexOf("! ", end)
+      );
+      const boundary = Math.max(newlineBoundary, whitespaceBoundary, punctuationBoundary);
+      if (boundary > minimumBoundary) {
+        end = boundary;
       }
     }
 
