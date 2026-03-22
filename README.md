@@ -125,8 +125,18 @@ On first run, `ownsearch setup` can:
 - prompt for `GEMINI_API_KEY`
 - link users to Google AI Studio
 - save the key to `~/.ownsearch/.env`
+- ask whether setup output should be optimized for a human or an agent
 - print exact next commands for CLI and MCP usage
 - optionally print an MCP config snippet for a selected agent
+
+Useful setup modes:
+
+```bash
+ownsearch setup
+ownsearch setup --audience human
+ownsearch setup --audience agent
+ownsearch setup --json
+```
 
 ## Real-world fit
 

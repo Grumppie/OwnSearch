@@ -48,19 +48,28 @@ interface DoctorVerdict {
   nextSteps: string[];
 }
 
+interface AgentConfigPayload {
+  platform: string;
+  configPath?: string;
+  configScope?: string;
+  installMethod?: string;
+  note?: string;
+  nextStep?: string;
+  config?: Record<string, unknown>;
+}
+
+type SetupAudience = "human" | "agent";
+
 function requireGeminiKey(): void {
   if (!process.env.GEMINI_API_KEY) {
     throw new OwnSearchError("Set GEMINI_API_KEY before running OwnSearch.");
   }
 }
 
-function buildAgentConfig(agent: SupportedAgent): Record<string, unknown> {
+function buildAgentConfig(agent: SupportedAgent): AgentConfigPayload {
   const stdioConfig = {
     command: "npx",
-    args: ["-y", PACKAGE_NAME, "serve-mcp"],
-    env: {
-      GEMINI_API_KEY: "${GEMINI_API_KEY}"
-    }
+    args: ["-y", PACKAGE_NAME, "serve-mcp"]
   };
 
   switch (agent) {
@@ -94,7 +103,6 @@ function buildAgentConfig(agent: SupportedAgent): Record<string, unknown> {
               type: "local",
               command: stdioConfig.command,
               args: stdioConfig.args,
-              env: stdioConfig.env,
               tools: ["*"]
             }
           }
@@ -238,28 +246,68 @@ async function ensureManagedGeminiKey(): Promise<{ present: boolean; source: str
   };
 }
 
+async function promptForSetupAudience(): Promise<SetupAudience> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return "agent";
+  }
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  try {
+    console.log("");
+    console.log("Who is running setup?");
+    console.log("  1. Human");
+    console.log("  2. Agent");
+
+    for (;;) {
+      const answer = (await rl.question("Select 1-2: ")).trim().toLowerCase();
+      switch (answer) {
+        case "1":
+        case "human":
+          return "human";
+        case "2":
+        case "agent":
+          return "agent";
+        default:
+          console.log("Enter 1 or 2.");
+      }
+    }
+  } finally {
+    rl.close();
+  }
+}
+
 function printSetupNextSteps(): void {
   console.log("");
-  console.log("Next commands:");
-  console.log("  CLI indexing:");
+  console.log("Next steps");
+  console.log("  1. Index a folder:");
+  console.log("     ownsearch index C:\\path\\to\\folder --name my-folder");
+  console.log("  2. Test search in the CLI:");
+  console.log("     ownsearch search \"your question here\" --limit 5");
+  console.log("  3. Get grounded context for an agent:");
+  console.log("     ownsearch search-context \"your question here\" --limit 8 --max-chars 12000");
+  console.log("  4. Start the MCP server:");
+  console.log("     ownsearch serve-mcp");
+  console.log("  5. Print agent-specific config:");
+  console.log("     ownsearch print-agent-config codex");
+  console.log("  6. Print the bundled retrieval skill:");
+  console.log(`     ownsearch print-skill ${BUNDLED_SKILL_NAME}`);
+}
+
+function printAgentSetupNextSteps(): void {
+  console.log("");
+  console.log("Agent-ready commands");
+  console.log("  Index an approved folder:");
   console.log("    ownsearch index C:\\path\\to\\folder --name my-folder");
-  console.log("  CLI search:");
-  console.log("    ownsearch search \"your question here\" --limit 5");
-  console.log("  CLI grounded context:");
+  console.log("  Retrieve grounded context:");
   console.log("    ownsearch search-context \"your question here\" --limit 8 --max-chars 12000");
-  console.log("  MCP server for agents:");
+  console.log("  Start the MCP server:");
   console.log("    ownsearch serve-mcp");
-  console.log("  Agent config snippets:");
+  console.log("  Print MCP config for the host agent:");
   console.log("    ownsearch print-agent-config codex");
-  console.log("    ownsearch print-agent-config claude-desktop");
-  console.log("    ownsearch print-agent-config cursor");
-  console.log("    ownsearch print-agent-config vscode");
-  console.log("    ownsearch print-agent-config github-copilot");
-  console.log("    ownsearch print-agent-config copilot-cli");
-  console.log("    ownsearch print-agent-config windsurf");
-  console.log("    ownsearch print-agent-config continue");
-  console.log("  Bundled retrieval skill:");
-  console.log(`    ownsearch print-skill ${BUNDLED_SKILL_NAME}`);
 }
 
 async function promptForAgentChoice(): Promise<SupportedAgent | undefined> {
@@ -326,24 +374,99 @@ async function promptForAgentChoice(): Promise<SupportedAgent | undefined> {
 }
 
 function printAgentConfigSnippet(agent: SupportedAgent): void {
+  const payload = buildAgentConfig(agent);
   console.log("");
-  console.log(`MCP config for ${agent}:`);
-  console.log(JSON.stringify(buildAgentConfig(agent), null, 2));
+  console.log(`Connect OwnSearch to ${agent}`);
+
+  if (payload.installMethod) {
+    console.log(`  Recommended install method: ${payload.installMethod}`);
+  }
+
+  if (payload.configPath) {
+    console.log(`  Config file: ${payload.configPath}`);
+  }
+
+  if (payload.configScope) {
+    console.log(`  Scope: ${payload.configScope}`);
+  }
+
+  if (payload.note) {
+    console.log(`  Note: ${payload.note}`);
+  }
+
+  if (payload.nextStep) {
+    console.log(`  Next step: ${payload.nextStep}`);
+  }
+
+  if (payload.config) {
+    console.log("");
+    console.log("Paste this config:");
+    console.log(JSON.stringify(payload.config, null, 2));
+    console.log("");
+    console.log(`OwnSearch will load GEMINI_API_KEY from ${getEnvPath()} if you ran \`ownsearch setup\`.`);
+  }
+}
+
+function printSetupSummary(input: {
+  configPath: string;
+  envPath: string;
+  qdrantUrl: string;
+  qdrantStarted: boolean;
+  geminiApiKeyPresent: boolean;
+  geminiApiKeySource: string;
+  geminiApiKeySavedToManagedEnv: boolean;
+}): void {
+  console.log("OwnSearch setup complete");
+  console.log(`  Config: ${input.configPath}`);
+  console.log(`  API key file: ${input.envPath}`);
+  console.log(`  Qdrant: ${input.qdrantUrl} (${input.qdrantStarted ? "started now" : "already running or reachable"})`);
+
+  if (input.geminiApiKeyPresent) {
+    console.log(`  Gemini API key: ready (${input.geminiApiKeySource})`);
+    if (input.geminiApiKeySavedToManagedEnv) {
+      console.log("  Saved your key to the managed OwnSearch env file.");
+    }
+  } else {
+    console.log("  Gemini API key: missing");
+  }
+}
+
+function printAgentSetupSummary(input: {
+  configPath: string;
+  envPath: string;
+  qdrantUrl: string;
+  qdrantStarted: boolean;
+  geminiApiKeyPresent: boolean;
+  geminiApiKeySource: string;
+}): void {
+  console.log("OwnSearch setup ready for agent use");
+  console.log(`  Config path: ${input.configPath}`);
+  console.log(`  Managed env path: ${input.envPath}`);
+  console.log(`  Qdrant endpoint: ${input.qdrantUrl}`);
+  console.log(`  Qdrant status: ${input.qdrantStarted ? "started during setup" : "already reachable"}`);
+  console.log(`  Gemini key: ${input.geminiApiKeyPresent ? `ready (${input.geminiApiKeySource})` : "missing"}`);
 }
 
 program
   .name("ownsearch")
   .description("Gemini-powered local search MCP server backed by Qdrant.")
-  .version("0.1.0");
+  .version("0.1.4");
 
 program
   .command("setup")
   .description("Create config and start a local Qdrant Docker container.")
-  .action(async () => {
+  .option("--json", "Print machine-readable JSON output")
+  .option("--audience <audience>", "Choose output style: human or agent")
+  .action(async (options: { json?: boolean; audience?: string }) => {
     const config = await loadConfig();
     const result = await ensureQdrantDocker();
     const gemini = await ensureManagedGeminiKey();
-    console.log(JSON.stringify({
+    const audience = options.json
+      ? "agent"
+      : options.audience === "human" || options.audience === "agent"
+        ? options.audience
+        : await promptForSetupAudience();
+    const summary = {
       configPath: getConfigPath(),
       envPath: getEnvPath(),
       qdrantUrl: config.qdrantUrl,
@@ -351,16 +474,30 @@ program
       geminiApiKeyPresent: gemini.present,
       geminiApiKeySource: gemini.source,
       geminiApiKeySavedToManagedEnv: gemini.savedToManagedEnv
-    }, null, 2));
+    };
+
+    if (options.json) {
+      console.log(JSON.stringify(summary, null, 2));
+      return;
+    } else if (audience === "agent") {
+      printAgentSetupSummary(summary);
+    } else {
+      printSetupSummary(summary);
+    }
+
     if (!gemini.present) {
       console.log(`GEMINI_API_KEY is not set. Re-run setup or add it to ${getEnvPath()} before indexing or search.`);
       return;
     }
 
-    printSetupNextSteps();
-    const agent = await promptForAgentChoice();
-    if (agent) {
-      printAgentConfigSnippet(agent);
+    if (audience === "agent") {
+      printAgentSetupNextSteps();
+    } else {
+      printSetupNextSteps();
+      const agent = await promptForAgentChoice();
+      if (agent) {
+        printAgentConfigSnippet(agent);
+      }
     }
   });
 
@@ -530,9 +667,16 @@ program
   .command("print-agent-config")
   .argument("<agent>", SUPPORTED_AGENTS.join(" | "))
   .description("Print an MCP config snippet for a supported agent.")
-  .action(async (agent: string) => {
+  .option("--json", "Print the full machine-readable payload")
+  .action(async (agent: string, options: { json?: boolean }) => {
     if (SUPPORTED_AGENTS.includes(agent as SupportedAgent)) {
-      console.log(JSON.stringify(buildAgentConfig(agent as SupportedAgent), null, 2));
+      const payload = buildAgentConfig(agent as SupportedAgent);
+      if (options.json) {
+        console.log(JSON.stringify(payload, null, 2));
+        return;
+      }
+
+      printAgentConfigSnippet(agent as SupportedAgent);
       return;
     }
 
