@@ -42,7 +42,7 @@ const SUPPORTED_AGENTS = [
 ] as const;
 type SupportedAgent = (typeof SUPPORTED_AGENTS)[number];
 const SHOULD_SHOW_PROGRESS = process.stderr.isTTY;
-const PACKAGE_VERSION = "0.1.8";
+const PACKAGE_VERSION = "0.1.9";
 const AUTO_INSTALL_AGENTS = new Set<InstallableAgent>([
   "codex",
   "continue",

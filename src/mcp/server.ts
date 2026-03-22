@@ -17,7 +17,7 @@ import { deepSearchContext } from "../retrieval.js";
 loadOwnSearchEnv();
 
 const BUNDLED_SKILL_NAME = "ownsearch-rag-search";
-const SERVER_VERSION = "0.1.8";
+const SERVER_VERSION = "0.1.9";
 const SKILL_RESOURCE_URI = "ownsearch://skills/retrieval";
 
 function packageRootFromCurrentFile() {
