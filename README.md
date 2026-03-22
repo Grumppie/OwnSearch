@@ -61,13 +61,20 @@ Typical agent workflows:
 - reranks and deduplicates result sets before returning them
 - lets agents retrieve ranked hits, exact chunks, or bundled grounded context
 
+Incremental indexing behavior:
+
+- if a file is unchanged, OwnSearch skips it
+- if a file is updated, OwnSearch re-indexes only that file's chunks
+- if a new file appears, OwnSearch indexes only the new file
+- if a file is deleted, OwnSearch removes that file's chunks from the index
+
 ## Current power
 
 What is already strong in the current package:
 
 - local-first setup with Docker-backed Qdrant
 - deterministic readiness checks through `ownsearch doctor`
-- multi-platform MCP config generation
+- multi-platform MCP config installation
 - bundled retrieval skill for better query planning
 - support for common text document formats
 - large plain text and code files are no longer blocked by the extracted-document size cap
@@ -217,6 +224,14 @@ The skill is intended to help an agent:
 - avoid duplicate-heavy answer synthesis
 - stay grounded when retrieval is probabilistic
 
+The MCP server also exposes the same guidance directly:
+
+- resource: `ownsearch://skills/retrieval`
+- prompt: `ownsearch-retrieval-guide`
+- tool: `get_retrieval_skill`
+
+That lets an attached agent load the OwnSearch retrieval playbook through MCP instead of relying on external repo knowledge.
+
 ## CLI commands
 
 - `ownsearch setup`
@@ -260,6 +275,11 @@ The MCP server currently exposes:
 - `list_roots`
 - `delete_root`
 - `store_status`
+
+In addition to tools, the MCP server exposes:
+
+- resource: `ownsearch://skills/retrieval`
+- prompt: `ownsearch-retrieval-guide`
 
 Recommended retrieval flow:
 

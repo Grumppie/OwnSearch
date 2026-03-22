@@ -9,15 +9,24 @@ description: Improve retrieval quality when an agent uses OwnSearch MCP tools to
 
 Use this skill to bridge the gap between what a user asks and what OwnSearch should retrieve. Treat retrieval as probabilistic: rewrite weak queries, run multiple targeted searches when needed, prefer grounded context over guesswork, and fetch exact chunks before making precise claims.
 
+If your MCP client supports it, load the OwnSearch retrieval resource first:
+
+- Resource: `ownsearch://skills/retrieval`
+- Prompt: `ownsearch-retrieval-guide`
+
+If not, call `get_retrieval_skill`.
+
 ## Retrieval Workflow
 
 1. Classify the user request.
 2. Generate one to four retrieval queries.
-3. Start with `search_context` for the strongest query.
-4. Use `deep_search_context` for archive-style, ambiguous, or recall-heavy questions.
-5. Expand to additional searches only if evidence is weak, duplicate-heavy, or incomplete.
-6. Use `get_chunks` after `search` when the answer needs exact wording, detailed comparison, or citation-grade grounding.
-7. Answer only from retrieved evidence. Say when the retrieved context is insufficient.
+3. Start with `literal_search` if the query contains an exact title, name, ID, quoted phrase, or other grep-friendly string.
+4. Otherwise start with `search_context` for the strongest query.
+5. Use `deep_search_context` for archive-style, ambiguous, or recall-heavy questions.
+6. Expand to additional searches only if evidence is weak, duplicate-heavy, or incomplete.
+7. Use `search` when you need to inspect ranking and source spread.
+8. Use `get_chunks` after `search` when the answer needs exact wording, detailed comparison, or citation-grade grounding.
+9. Answer only from retrieved evidence. Say when the retrieved context is insufficient.
 
 ## Query Planning
 
@@ -67,6 +76,7 @@ Use `deep_search_context` when:
 - the question spans multiple documents or timelines
 - the answer is likely to require recall beyond the top few semantic hits
 - the user asks "what is", "what happened", or "tell me the full story" for an entity or event
+- the user wants “all the relevant context” instead of just the first plausible answer
 - the first-pass `search_context` result feels too thin
 
 Use `search` when:
@@ -103,6 +113,7 @@ If the first search is weak:
 - split compound questions into separate searches
 - add likely section names or file hints
 - search once for the concept and once for the expected answer shape
+- if the query includes a literal anchor, retry with `literal_search` before further semantic expansion
 
 Examples:
 
@@ -123,6 +134,7 @@ Examples:
 ## Answering Rules
 
 - Do not invent facts that were not retrieved.
+- Prefer the retrieval resource and prompt as the operating manual for tool selection when working through MCP.
 - Prefer citing file paths or chunk provenance when the client supports it.
 - If retrieval is partial, say which part is grounded and which part is uncertain.
 - If evidence conflicts, surface the conflict instead of averaging it away.
